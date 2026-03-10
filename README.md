@@ -9,6 +9,10 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 [Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [How It Works](#how-it-works)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/kangraemin/claude-inspector)](https://github.com/kangraemin/claude-inspector/releases/latest)
+[![macOS](https://img.shields.io/badge/macOS-arm64%20%7C%20x64-black)](https://github.com/kangraemin/claude-inspector/releases/latest)
+
 **English** | [한국어](README.ko.md)
 
 </div>
@@ -16,7 +20,7 @@ and visualizes all 5 prompt augmentation mechanisms.
 ---
 
 <p align="center">
-  <img src="public/screenshots/proxy-request-ko.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
+  <img src="public/screenshots/proxy-request-en.png" width="100%" alt="Proxy — Request view showing CLAUDE.md Global/Local section chips with inline text highlight" />
 </p>
 
 <p align="center">
@@ -27,42 +31,52 @@ and visualizes all 5 prompt augmentation mechanisms.
 
 All discovered from **real captured traffic**. See what Claude Code hides from you.
 
-### 1. Your message is never just your message
+### 1. CLAUDE.md is injected into every single request
 
-You type `hello`. Claude Code wraps it with silently prepended blocks:
+You type `hello`. Claude Code silently prepends **~12KB** before your message:
 
 | Block | What's inside | Size |
 |-------|--------------|------|
 | `content[0]` | Available skills list | ~2KB |
-| `content[1]` | CLAUDE.md + rules + memory + date | **~10KB** |
+| `content[1]` | CLAUDE.md + rules + memory | **~10KB** |
 | `content[2]` | What you actually typed | few bytes |
 
 **Injection order:** Global CLAUDE.md → Global rules → Project CLAUDE.md → Memory
 
-These ~10KB are re-sent with **every request** — not stacked, but always present. A verbose CLAUDE.md silently inflates every API call.
+This ~12KB payload is re-sent with **every request**. A 500-line CLAUDE.md quietly burns tokens on every API call. Keep it lean.
 
-### 2. Claude Code uses multiple models behind the scenes
+### 2. MCP tools are lazy-loaded — watch `tools[]` grow
 
-Not everything runs on Opus/Sonnet. Lighter tasks get routed to cheaper models:
+Built-in tools (27) ship their full JSON schemas every request. MCP tools don't — they start as **names only**.
 
-| Task | Model |
-|------|-------|
-| **Quota check** at startup | Haiku 3.5 |
-| **Topic detection** per message | Haiku 3.5 |
-| **Bash safety pre-check** | Haiku 3.5 |
-| **Context compaction** | Sonnet |
-| **Main agent loop** | Your selected model |
+**Watch the count change in real-time:**
 
-Each user message triggers a hidden classification call (`{"isNewTopic": boolean, "title": string}`) before the main model even sees it.
+| Step | What happens | `tools[]` count |
+|------|-------------|-----------------|
+| Initial request | 27 built-in tools loaded | **27** |
+| Model calls `ToolSearch("context7")` | Full schema for 2 MCP tools returned | **29** |
+| Model calls `ToolSearch("til")` | 6 more MCP tool schemas added | **35** |
 
-### 3. MCP tools are lazy-loaded to save tokens
+Unused MCP tools never consume tokens. The Inspector lets you watch `tools[]` grow as the model discovers what it needs.
 
-- **Built-in tools** (27) — full JSON schemas sent every request
-- **MCP tools** — listed as names only, loaded on demand
+### 3. Images are base64-encoded inline — not multipart
 
-**The flow:** `ToolSearch` query → full schema returned → added to `tools[]`. Unused MCP tools never consume tokens.
+When Claude Code reads a screenshot or image file, it doesn't use multipart form data. The image is **base64-encoded and embedded directly** in the JSON body:
 
-### 4. Skill ≠ Command — three injection paths
+```json
+{
+  "type": "image",
+  "source": {
+    "type": "base64",
+    "media_type": "image/png",
+    "data": "iVBORw0KGgo..."
+  }
+}
+```
+
+A single screenshot can add **hundreds of KB** to the request payload. The Inspector shows you the exact size.
+
+### 4. Skill ≠ Command — completely different injection paths
 
 Typing `/something` triggers one of three completely different mechanisms:
 
@@ -73,47 +87,51 @@ Typing `/something` triggers one of three completely different mechanisms:
 | **Injection** | `<local-command-stdout>` | Full prompt in user msg | `tool_use` → `tool_result` |
 | **Model sees** | Result only | Full prompt | Full prompt |
 
-### 5. Context compaction — lossy compression
+**Commands** run locally and only pass the result. **Skills** inject the entire prompt text — and it **stays in every subsequent request** until the session ends.
 
-When nearing the context limit, the entire conversation is **compressed into 9 structured sections**:
+### 5. Previous messages pile up — use `/clear` often
 
-- **Kept:** requests, file paths with line numbers, error history, user messages verbatim, pending tasks
-- **Lost:** tool call results, thinking blocks, intermediate back-and-forth
+Claude Code re-sends the **entire** `messages[]` array with every request:
 
-A 153-message conversation (~40KB) → ~10KB summary. The model continues as if it remembers everything, but it's working from a reconstruction.
+```json
+{
+  "messages": [
+    {"role": "user",      "content": [/* ~12KB CLAUDE.md */ , "hello"]},
+    {"role": "assistant", "content": [/* tool_use, thinking, response */]},
+    {"role": "user",      "content": [/* ~12KB CLAUDE.md */ , "fix the bug"]},
+    {"role": "assistant", "content": [/* tool_use, thinking, response */]},
+    // ... 30 turns = 30 copies of CLAUDE.md + all responses
+  ]
+}
+```
 
-### 6. Skills and plans persist forever
+| Turns | Approx. payload size |
+|-------|---------------------|
+| 1 | ~15KB |
+| 10 | ~150KB |
+| 30 | ~400KB+ |
 
-Once invoked, skill prompts and plan files **stay in every request** until the session ends.
+Most of it is old conversation you no longer need. Running `/clear` resets the context and drops the accumulated weight. Clear early, clear often.
 
-| Persistent context | Size (real capture) |
-|--------------------|---------------------|
-| 2 invoked skills | ~13KB |
-| Active plan file | ~5KB |
-| CLAUDE.md + rules | ~10KB |
-| Compacted context | ~10KB |
-| **Total hidden overhead** | **~38KB per request** |
+### 6. Sub-agents run in fully isolated contexts
 
-Five 3KB skills = 15KB added to every request, forever. Unfinished plans keep consuming tokens.
+When Claude Code spawns a sub-agent (via the `Agent` tool), it creates a **completely separate API call**. The parent and sub-agent have entirely different `messages[]`:
 
-### 7. Every bash command gets a safety check
+| | Parent API call | Sub-agent API call |
+|---|---|---|
+| **`messages[]`** | Full conversation history (all turns) | Only the task prompt — **no parent history** |
+| **CLAUDE.md** | Included | Included (independently) |
+| **tools[]** | All loaded tools | Fresh set |
+| **Context** | Accumulated | Starts from zero |
 
-Before executing any shell command, a **separate LLM call** extracts command prefixes and checks for injection patterns. Commands like `` git diff $(pwd) `` trigger `command_injection_detected` and get blocked.
-
-After execution, another LLM call extracts modified file paths as `<filepaths>` — this powers Claude Code's awareness of what changed.
+The Inspector captures both calls side by side, so you can compare what each one sees.
 
 ## Install
 
 ### Homebrew (Recommended)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector
-```
-
-Then launch from **Spotlight** (`Cmd+Space` → "Claude Inspector") or:
-
-```bash
-open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
 ```
 
 ### Direct Download
@@ -130,7 +148,7 @@ Download the `.dmg` from the [Releases](https://github.com/kangraemin/claude-ins
 brew uninstall --cask claude-inspector
 ```
 
-## For Contributors
+## Development
 
 ```bash
 git clone https://github.com/kangraemin/claude-inspector.git
@@ -156,49 +174,16 @@ ANTHROPIC_BASE_URL=http://localhost:9090 claude
 
 **3.** Every API request/response is captured in real-time.
 
-### What you can do
-
-| Tab | Description |
-|-----|-------------|
-| **Messages** | Browse `messages[]` by role — filter by user/assistant/system, full-text search (`Cmd+F`) |
-| **Request** | Raw request JSON with collapsible tree; CLAUDE.md chips broken down by file (Global CLAUDE.md, Global Rules, Local CLAUDE.md, Memory) — click any chip to highlight that section inline |
-| **Response** | Full response including SSE stream auto-reassembly |
-| **Analysis** | Auto-detects which of the 5 mechanisms are present, shows each injected section's content with syntax highlighting — click a chip to jump to that section |
-
-## How It Works
-
-Claude Code enhances every API call with up to **5 prompt augmentation mechanisms** — but these are invisible during normal usage.
-
-| Mechanism | Injection Point | Detail |
-|-----------|----------------|--------|
-| **CLAUDE.md** | `messages[].content` → `<system-reminder>` | Global + Local CLAUDE.md, rules files, and memory — each listed as a named section |
-| **Output Style** | `system[]` additional block | Added when `/output` style is set |
-| **Slash Command** | `messages[].content` → `<command-message>` | Command prompt injected before your message |
-| **Skill** | `tool_result` after Skill `tool_use` | Skill content returned via tool result flow |
-| **Sub-Agent** | Separate isolated API call via Task tool | Spawns a fully independent API call |
-
-Claude Inspector sits between Claude Code and the Anthropic API, capturing the full request/response payload — so you can see exactly what gets injected and where.
-
-> **Privacy**: All traffic stays on your machine. The proxy runs on `localhost` only. No data is sent anywhere except directly to `api.anthropic.com`.
-
 ## Tech Stack
 
-- **Electron** — cross-platform desktop (macOS `hiddenInset` titlebar)
-- **Vanilla JS** — zero frameworks, zero build steps
-- **Node `http`/`https`** — lightweight MITM proxy with SSE stream reassembly
-- **highlight.js** + **marked** — syntax highlighting & markdown rendering
+| Layer | What | Why |
+|-------|------|-----|
+| **Electron** | Desktop shell, IPC between main/renderer | Native macOS titlebar (`hiddenInset`), code-signed + notarized DMG distribution |
+| **Vanilla JS** | Zero frameworks, zero build steps | Entire UI in a single `index.html` — no bundler, no transpiler, no React |
+| **Node `http`/`https`** | MITM proxy on `localhost` | Intercepts Claude Code ↔ Anthropic API traffic, reassembles SSE streams into complete response objects |
+| **highlight.js + marked** | Syntax highlighting & markdown | Renders JSON payloads and markdown content inline |
 
-## Build
-
-```bash
-npm run dist         # .dmg + .exe
-npm run dist:mac     # macOS only (arm64 + x64)
-npm run dist:win     # Windows only (NSIS)
-```
-
-## Related
-
-Built on top of the research from [Reverse Engineering Claude Code — How Skills Different from Agents, Commands, and Styles](https://).
+> **Privacy**: All traffic stays on `localhost`. Nothing is sent anywhere except directly to `api.anthropic.com`.
 
 ## License
 
