@@ -435,7 +435,7 @@
       background: var(--bg); border: 1px solid var(--border);
       border-radius: 5px; padding: 8px 10px;
       font-family: 'SF Mono', monospace; font-size: 11px;
-      line-height: 1.6; word-break: break-all;
+      line-height: 1.6; white-space: nowrap; overflow-x: auto;
     }
     .prx-entry {
       padding: 9px 13px; border-bottom: 1px solid var(--border);
@@ -662,6 +662,7 @@
       display: block; margin-top: 6px; background: var(--bg2, var(--sidebar));
       border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px;
       font-family: monospace; font-size: .85rem; color: var(--accent, var(--blue));
+      white-space: nowrap; overflow-x: auto;
       user-select: all; cursor: text;
     }
     .onboard-note { font-size: .8rem; color: var(--fg2, var(--dim)); margin-bottom: 20px; }
