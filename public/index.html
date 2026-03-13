@@ -609,10 +609,9 @@
     .jt-bool { color: var(--blue); }
     .jt-null { color: var(--dim); }
     .jt-row  { display: block; white-space: nowrap; }
-    .jt-lined { counter-reset: jt-line; position: relative; padding-left: 52px; }
-    .jt-lined .jt-row { counter-increment: jt-line; }
+    .jt-lined { position: relative; padding-left: 52px; }
     .jt-lined .jt-row::before {
-      content: counter(jt-line);
+      content: attr(data-ln);
       position: absolute;
       left: 0;
       width: 40px;
@@ -622,6 +621,7 @@
       user-select: none;
       opacity: 0.5;
     }
+    .jt-line-info { color: var(--dim); font-size: 10px; padding: 4px 12px; opacity: 0.6; }
     .jt-str-long { display: inline; }
     .jt-str-preview {
       display: inline-block; vertical-align: top; max-width: calc(100% - 60px);
@@ -1666,6 +1666,7 @@ function collectCfg() {
 
 // ─── JSON Tree Viewer ─────────────────────────────────────────────────────
 let _jtId = 0;
+let _jtLine = 0;
 function buildJsonHtml(val, depth, trailing, totalBytes) {
   depth = depth || 0;
   trailing = trailing || '';
@@ -1698,9 +1699,10 @@ function buildJsonHtml(val, depth, trailing, totalBytes) {
   const id = `jt${++_jtId}`;
   const label = isArr ? `${entries.length}` : `${entries.length}`;
   const rows = entries.map(([k, v], i) => {
+    const ln = ++_jtLine;
     const comma = i < entries.length - 1 ? '<span style="color:var(--dim)">,</span>' : '';
     const keyPart = k !== null ? `<span class="jt-key">"${esc(String(k))}"</span><span style="color:var(--dim)">: </span>` : '';
-    return `<div class="jt-row" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1, comma, totalBytes)}</div>`;
+    return `<div class="jt-row" data-ln="${ln}" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1, comma, totalBytes)}</div>`;
   }).join('');
   const typeTag = isArr ? `[${label}]` : `{${label}}`;
 
@@ -1714,13 +1716,14 @@ function buildJsonHtml(val, depth, trailing, totalBytes) {
   const pctStr = pct >= 1 ? pct.toFixed(0) + '%' : pct >= 0.1 ? pct.toFixed(1) + '%' : '<0.1%';
   const tokTag = `<span class="jt-tok">~${tokStr} tok · ${pctStr}</span>`;
 
+  const closeLn = ++_jtLine;
   return `<span>`
     + `<span class="jt-btn" id="${id}-btn" onclick="jtToggle('${id}')">▼</span>`
     + `<span style="color:var(--dim)">${open}</span>`
     + `<span class="jt-tag" id="${id}-s" onclick="jtToggle('${id}')" style="display:none">${typeTag} ${tokTag}${trailing}</span>`
     + `<span id="${id}-b">`
     +   rows
-    +   `<div class="jt-row"><span style="color:var(--dim)">${close}</span>${trailing}</div>`
+    +   `<div class="jt-row" data-ln="${closeLn}"><span style="color:var(--dim)">${close}</span>${trailing}</div>`
     + `</span>`
     + `</span>`;
 }
@@ -1748,7 +1751,9 @@ function renderJsonTree(container, data) {
   try { obj = typeof data === 'string' ? JSON.parse(data) : data; }
   catch (e) { container.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); return; }
   const totalBytes = new TextEncoder().encode(JSON.stringify(obj)).length;
-  container.innerHTML = buildJsonHtml(obj, 0, '', totalBytes);
+  _jtLine = 0;
+  container.innerHTML = buildJsonHtml(obj, 0, '', totalBytes)
+    + `<div class="jt-line-info">${_jtLine} lines total</div>`;
   container.classList.add('jt-lined');
 }
 
