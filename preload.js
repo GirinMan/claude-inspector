@@ -1,3 +1,5 @@
+require('@sentry/electron/renderer').init();
+
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
