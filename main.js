@@ -1,3 +1,4 @@
+require('dotenv').config();
 const Sentry = require('@sentry/electron/main');
 Sentry.init({
   dsn: process.env.SENTRY_DSN || '',
