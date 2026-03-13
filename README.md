@@ -151,7 +151,7 @@ Download the `.dmg` from the [Releases](https://github.com/kangraemin/claude-ins
 ### Upgrade
 
 ```bash
-brew upgrade --cask claude-inspector && sleep 2 && open -a "Claude Inspector"
+brew update && brew upgrade --cask claude-inspector && sleep 2 && open -a "Claude Inspector"
 ```
 
 ### Uninstall

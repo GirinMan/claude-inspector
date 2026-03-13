@@ -151,7 +151,7 @@ brew install --cask kangraemin/tap/claude-inspector && sleep 2 && open -a "Claud
 ### 업그레이드
 
 ```bash
-brew upgrade --cask claude-inspector && sleep 2 && open -a "Claude Inspector"
+brew update && brew upgrade --cask claude-inspector && sleep 2 && open -a "Claude Inspector"
 ```
 
 ### 삭제
