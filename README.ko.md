@@ -137,7 +137,7 @@ Inspector는 부모와 서브 에이전트 호출을 모두 캡처하므로, 각
 ### Homebrew (권장)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector && sleep 2 && open -a "Claude Inspector"
 ```
 
 ### 직접 다운로드

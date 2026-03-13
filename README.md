@@ -137,7 +137,7 @@ The Inspector captures both calls side by side, so you can compare what each one
 ### Homebrew (Recommended)
 
 ```bash
-brew install --cask kangraemin/tap/claude-inspector && open -a "Claude Inspector"
+brew install --cask kangraemin/tap/claude-inspector && sleep 2 && open -a "Claude Inspector"
 ```
 
 ### Direct Download
