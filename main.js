@@ -136,6 +136,10 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
 
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
+      req.on('error', () => {
+        if (!res.headersSent) res.writeHead(400);
+        res.end();
+      });
       const chunks = [];
       req.on('data', chunk => chunks.push(chunk));
       req.on('end', () => {
@@ -161,6 +165,7 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
           res.writeHead(proxyRes.statusCode, proxyRes.headers);
           const respChunks = [];
           proxyRes.on('data', chunk => { respChunks.push(chunk); res.write(chunk); });
+          proxyRes.on('error', () => { res.end(); });
           proxyRes.on('end', () => {
             res.end();
             setImmediate(() => {
