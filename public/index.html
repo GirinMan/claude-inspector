@@ -611,6 +611,7 @@
     .jt-row  { display: block; white-space: nowrap; }
     .jt-lined { counter-reset: jt-line; position: relative; padding-left: 52px; }
     .jt-lined .jt-row { counter-increment: jt-line; }
+    .jt-lined .jt-row.jt-no-count { counter-increment: none; }
     .jt-lined .jt-row::before {
       content: counter(jt-line);
       position: absolute;
@@ -647,6 +648,7 @@
       padding: 0 3px; vertical-align: middle;
     }
     .jt-tag:hover { color: var(--text); }
+    .jt-tok { color: var(--dim); font-size: 9px; opacity: 0.7; margin-left: 4px; }
     .proxy-token-pill {
       padding: 6px 12px;
       font-size: 11px;
@@ -1665,9 +1667,10 @@ function collectCfg() {
 
 // ─── JSON Tree Viewer ─────────────────────────────────────────────────────
 let _jtId = 0;
-function buildJsonHtml(val, depth, trailing) {
+function buildJsonHtml(val, depth, trailing, totalBytes) {
   depth = depth || 0;
   trailing = trailing || '';
+  totalBytes = totalBytes || 0;
   if (val === null) return '<span class="jt-null">null</span>' + trailing;
   if (val === true || val === false) return `<span class="jt-bool">${val}</span>` + trailing;
   if (typeof val === 'number') return `<span class="jt-num">${val}</span>` + trailing;
@@ -1698,14 +1701,24 @@ function buildJsonHtml(val, depth, trailing) {
   const rows = entries.map(([k, v], i) => {
     const comma = i < entries.length - 1 ? '<span style="color:var(--dim)">,</span>' : '';
     const keyPart = k !== null ? `<span class="jt-key">"${esc(String(k))}"</span><span style="color:var(--dim)">: </span>` : '';
-    return `<div class="jt-row" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1, comma)}</div>`;
+    return `<div class="jt-row" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1, comma, totalBytes)}</div>`;
   }).join('');
   const typeTag = isArr ? `[${label}]` : `{${label}}`;
+
+  // 접힌 노드 토큰 비중 표시
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(val)).length;
+  const tokens = Math.ceil(jsonBytes / 3.5);
+  const tokStr = tokens >= 1000000 ? (tokens / 1000000).toFixed(1) + 'M'
+               : tokens >= 1000 ? (tokens / 1000).toFixed(1) + 'K'
+               : String(tokens);
+  const pct = totalBytes > 0 ? (jsonBytes / totalBytes * 100) : 0;
+  const pctStr = pct >= 1 ? pct.toFixed(0) + '%' : pct >= 0.1 ? pct.toFixed(1) + '%' : '<0.1%';
+  const tokTag = `<span class="jt-tok">~${tokStr} tok · ${pctStr}</span>`;
 
   return `<span>`
     + `<span class="jt-btn" id="${id}-btn" onclick="jtToggle('${id}')">▼</span>`
     + `<span style="color:var(--dim)">${open}</span>`
-    + `<span class="jt-tag" id="${id}-s" onclick="jtToggle('${id}')" style="display:none">${typeTag}${trailing}</span>`
+    + `<span class="jt-tag" id="${id}-s" onclick="jtToggle('${id}')" style="display:none">${typeTag} ${tokTag}${trailing}</span>`
     + `<span id="${id}-b">`
     +   rows
     +   `<div class="jt-row"><span style="color:var(--dim)">${close}</span>${trailing}</div>`
@@ -1727,6 +1740,7 @@ function jtToggle(id) {
   const btn = document.getElementById(`${id}-btn`);
   const open = body.style.display !== 'none';
   body.style.display = open ? 'none' : '';
+  body.querySelectorAll('.jt-row').forEach(r => r.classList.toggle('jt-no-count', open));
   summary.style.display = open ? '' : 'none';
   btn.textContent = open ? '▶' : '▼';
 }
@@ -1735,7 +1749,8 @@ function renderJsonTree(container, data) {
   let obj;
   try { obj = typeof data === 'string' ? JSON.parse(data) : data; }
   catch (e) { container.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); return; }
-  container.innerHTML = buildJsonHtml(obj, 0);
+  const totalBytes = new TextEncoder().encode(JSON.stringify(obj)).length;
+  container.innerHTML = buildJsonHtml(obj, 0, '', totalBytes);
   container.classList.add('jt-lined');
 }
 
@@ -2678,11 +2693,27 @@ function highlightMechInJsonTree(container, body, mechKey) {
     }
   }
 
-  function hlRange(el, start, end) {
+  function hlRange(el, start, end, wholeElement) {
+    if (wholeElement) {
+      el.classList.add('mech-hl-text');
+      requestAnimationFrame(() => el.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+      return;
+    }
     const html = el.innerHTML;
+    // end 위치가 HTML 엔티티 중간이면 보정
+    let safeEnd = end;
+    for (let i = Math.max(0, safeEnd - 8); i < safeEnd; i++) {
+      if (html[i] === '&') {
+        const semi = html.indexOf(';', i);
+        if (semi !== -1 && semi < i + 10 && semi >= safeEnd) {
+          safeEnd = semi + 1;
+          break;
+        }
+      }
+    }
     el.innerHTML = html.slice(0, start)
-      + '<span class="mech-hl-text">' + html.slice(start, end) + '</span>'
-      + html.slice(end);
+      + '<span class="mech-hl-text">' + html.slice(start, safeEnd) + '</span>'
+      + html.slice(safeEnd);
     const hl = el.querySelector('.mech-hl-text');
     if (hl) requestAnimationFrame(() => hl.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   }
@@ -2717,7 +2748,7 @@ function highlightMechInJsonTree(container, body, mechKey) {
       } else {
         end = html.length;
       }
-      hlRange(el, start, end);
+      hlRange(el, start, end, true);
       break;
     }
 
@@ -2894,11 +2925,20 @@ function renderProxyDetail() {
     ? (() => {
         const bytes = new TextEncoder().encode(JSON.stringify(data)).length;
         const kb = (bytes / 1024).toFixed(1);
+        const fmtTok = (n) => n >= 1000000 ? (n/1000000).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(n);
+        const usage = entry.response?.body?.usage;
+        if (usage) {
+          let parts = `<span class="tt-badge">${kb} KB</span>`;
+          parts += `<span class="tt-badge">↑ ${fmtTok(usage.input_tokens)} in</span>`;
+          parts += `<span class="tt-badge">↓ ${fmtTok(usage.output_tokens)} out</span>`;
+          if (usage.cache_read_input_tokens) parts += `<span class="tt-badge">♻ ${fmtTok(usage.cache_read_input_tokens)} cache read</span>`;
+          if (usage.cache_creation_input_tokens) parts += `<span class="tt-badge">📝 ${fmtTok(usage.cache_creation_input_tokens)} cache write</span>`;
+          parts += `<span style="color:var(--green);font-size:9px;margin-left:4px">actual</span>`;
+          return `<div class="proxy-token-pill">${parts}</div>`;
+        }
         const tokens = Math.ceil(bytes / 3.5);
-        const tokStr = tokens >= 1000000 ? (tokens / 1000000).toFixed(1) + 'M'
-                     : tokens >= 1000 ? (tokens / 1000).toFixed(1) + 'K'
-                     : String(tokens);
-        return `<div class="proxy-token-pill"><span class="tt-badge">${kb} KB</span><span class="tt-badge">~${tokStr} tokens</span></div>`;
+        const tokStr = fmtTok(tokens);
+        return `<div class="proxy-token-pill"><span class="tt-badge">${kb} KB</span><span class="tt-badge">~${tokStr} tokens</span><span style="color:var(--dim);font-size:9px;margin-left:4px">estimated</span></div>`;
       })()
     : '';
   const prevScrollTop = document.getElementById('proxyDetailCode')?.scrollTop ?? 0;
