@@ -27,7 +27,8 @@
       "public/**",
       "assets/icon.png",
       "assets/icon.icns",
-      "node_modules/@anthropic-ai/sdk/**"
+      "node_modules/@anthropic-ai/sdk/**",
+      "node_modules/@sentry/**"
     ],
     "afterSign": "scripts/notarize.js",
     "mac": {
@@ -49,7 +50,8 @@
     }
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.78.0"
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@sentry/electron": "^7.10.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
