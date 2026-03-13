@@ -609,9 +609,10 @@
     .jt-bool { color: var(--blue); }
     .jt-null { color: var(--dim); }
     .jt-row  { display: block; white-space: nowrap; }
-    .jt-lined { position: relative; padding-left: 52px; }
+    .jt-lined { counter-reset: jt-line; position: relative; padding-left: 52px; }
+    .jt-lined .jt-row { counter-increment: jt-line; }
     .jt-lined .jt-row::before {
-      content: attr(data-line);
+      content: counter(jt-line);
       position: absolute;
       left: 0;
       width: 40px;
@@ -629,9 +630,6 @@
     }
     .jt-str-expanded {
       color: var(--orange); white-space: pre-wrap; word-break: break-word;
-      display: block; max-height: 200px; overflow-y: auto;
-      background: rgba(255,255,255,0.03); border-radius: 4px;
-      padding: 8px; margin: 4px 0;
     }
     .jt-str-toggle {
       color: var(--dim); font-size: 10px; cursor: pointer;
@@ -1667,7 +1665,6 @@ function collectCfg() {
 
 // ─── JSON Tree Viewer ─────────────────────────────────────────────────────
 let _jtId = 0;
-let _jtLine = 0;
 function buildJsonHtml(val, depth, trailing) {
   depth = depth || 0;
   trailing = trailing || '';
@@ -1701,7 +1698,7 @@ function buildJsonHtml(val, depth, trailing) {
   const rows = entries.map(([k, v], i) => {
     const comma = i < entries.length - 1 ? '<span style="color:var(--dim)">,</span>' : '';
     const keyPart = k !== null ? `<span class="jt-key">"${esc(String(k))}"</span><span style="color:var(--dim)">: </span>` : '';
-    return `<div class="jt-row" data-line="${++_jtLine}" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1, comma)}</div>`;
+    return `<div class="jt-row" style="padding-left:16px">${keyPart}${buildJsonHtml(v, depth + 1, comma)}</div>`;
   }).join('');
   const typeTag = isArr ? `[${label}]` : `{${label}}`;
 
@@ -1711,7 +1708,7 @@ function buildJsonHtml(val, depth, trailing) {
     + `<span class="jt-tag" id="${id}-s" onclick="jtToggle('${id}')" style="display:none">${typeTag}${trailing}</span>`
     + `<span id="${id}-b">`
     +   rows
-    +   `<div class="jt-row" data-line="${++_jtLine}"><span style="color:var(--dim)">${close}</span>${trailing}</div>`
+    +   `<div class="jt-row"><span style="color:var(--dim)">${close}</span>${trailing}</div>`
     + `</span>`
     + `</span>`;
 }
@@ -1738,7 +1735,6 @@ function renderJsonTree(container, data) {
   let obj;
   try { obj = typeof data === 'string' ? JSON.parse(data) : data; }
   catch (e) { container.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); return; }
-  _jtLine = 0;
   container.innerHTML = buildJsonHtml(obj, 0);
   container.classList.add('jt-lined');
 }
