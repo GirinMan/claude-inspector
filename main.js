@@ -202,6 +202,14 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
   });
 });
 
+ipcMain.handle('proxy-status', () => {
+  if (proxyServer) {
+    try { return { running: true, port: proxyServer.address().port }; }
+    catch { return { running: false }; }
+  }
+  return { running: false };
+});
+
 ipcMain.handle('proxy-stop', () => {
   if (!proxyServer) return { stopped: true };
   return new Promise((resolve) => {

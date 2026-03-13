@@ -3182,6 +3182,35 @@ if (!SHOW_SIMULATOR) {
   switchM('home');
 }
 
+// ── 프록시 상태 동기화 (리로드 시 메인 프로세스와 sync) ──────────────
+(async () => {
+  if (!window.electronAPI?.proxyStatus) return;
+  try {
+    const st = await window.electronAPI.proxyStatus();
+    if (st.running) {
+      proxyRunning = true;
+      proxyActualPort = st.port;
+      document.getElementById('proxyPort').value = st.port;
+      // 이벤트 리스너 재등록
+      window.electronAPI.offProxy();
+      window.electronAPI.onProxyRequest((data) => {
+        proxyCaptures.unshift(data);
+        if (proxyCaptures.length > 50) proxyCaptures.pop();
+        debouncedRenderProxyList();
+      });
+      window.electronAPI.onProxyResponse((data) => {
+        const entry = proxyCaptures.find(e => e.id === data.id);
+        if (entry) {
+          entry.response = data;
+          debouncedRenderProxyList();
+          if (selectedProxyId === data.id) debouncedRenderProxyDetail();
+        }
+      });
+      renderProxyStatus();
+    }
+  } catch {}
+})();
+
 // ── Onboarding Modal ─────────────────────────────────────────────────
 function closeOnboard() {
   document.getElementById('onboardModal').style.display = 'none';
