@@ -629,8 +629,19 @@
       color: var(--orange); cursor: pointer;
     }
     .jt-str-expanded {
-      color: var(--orange); white-space: pre-wrap; word-break: break-word;
+      color: var(--orange);
     }
+    .jt-exp-line {
+      display: block; white-space: pre-wrap; word-break: break-word;
+      color: var(--orange);
+    }
+    .jt-lined .jt-exp-line::before {
+      content: attr(data-ln);
+      position: absolute; left: 0; width: 40px;
+      text-align: right; color: var(--dim); font-size: 11px;
+      user-select: none; opacity: 0.5;
+    }
+    .jt-no-ln::before { content: '' !important; }
     .jt-str-toggle {
       color: var(--dim); font-size: 10px; cursor: pointer;
       padding: 0 4px; user-select: none;
@@ -1680,12 +1691,23 @@ function buildJsonHtml(val, depth, trailing, totalBytes) {
       const sid = `jts${++_jtId}`;
       const preview = esc(val.slice(0, 80)).replace(/\\n/g, ' ').replace(/\n/g, ' ') + '…';
       const expanded = esc(val).replace(/\\n/g, '\n');
+      const lines = expanded.split('\n');
+      const baseLn = _jtLine;
+      let expandedRows = '';
+      for (let li = 0; li < lines.length; li++) {
+        const ln = li === 0 ? baseLn : ++_jtLine;
+        const isLast = li === lines.length - 1;
+        const openQuote = li === 0 ? '"' : '';
+        const closeQuote = isLast ? '"' : '';
+        expandedRows += `<div class="jt-exp-line" data-ln="${ln}">${openQuote}${lines[li]}${closeQuote}</div>`;
+      }
       return `<span class="jt-str-long">`
         + `<span class="jt-str-toggle" id="${sid}-btn" onclick="jtStrToggle('${sid}')">▶</span>`
         + `<span class="jt-str-preview" id="${sid}-s" onclick="jtStrToggle('${sid}')">"${preview}" <span style="color:var(--dim);font-size:10px">(${val.length} chars)</span></span>`
-        + `<span class="jt-str-expanded" id="${sid}-b" style="display:none">`
+        + `<div class="jt-str-expanded" id="${sid}-b" style="display:none">`
         + `<span class="jt-str-toggle" onclick="jtStrToggle('${sid}')">▼</span>`
-        + `"${expanded}"</span>`
+        + expandedRows
+        + `</div>`
         + `</span>` + trailing;
     }
     return `<span class="jt-str">"${esc(val)}"</span>` + trailing;
@@ -1731,9 +1753,13 @@ function buildJsonHtml(val, depth, trailing, totalBytes) {
 function jtStrToggle(id) {
   const body = document.getElementById(`${id}-b`);
   const summary = document.getElementById(`${id}-s`);
+  const btn = document.getElementById(`${id}-btn`);
   const open = body.style.display !== 'none';
   body.style.display = open ? 'none' : '';
   summary.style.display = open ? '' : 'none';
+  if (btn) btn.style.display = open ? '' : 'none';
+  const parentRow = body.closest('.jt-row');
+  if (parentRow) parentRow.classList.toggle('jt-no-ln', !open);
 }
 
 function jtToggle(id) {
@@ -2690,8 +2716,14 @@ function highlightMechInJsonTree(container, body, mechKey) {
   if (!mechKey) return;
 
   function expandLongStr(el) {
-    if (el.classList.contains('jt-str-expanded') && el.style.display === 'none') {
-      const sid = el.id.replace(/-b$/, '');
+    let target = el;
+    // preview 클릭 시 sibling expanded 찾기
+    if (el.classList.contains('jt-str-preview')) {
+      const parent = el.closest('.jt-str-long');
+      if (parent) target = parent.querySelector('.jt-str-expanded');
+    }
+    if (target && target.classList.contains('jt-str-expanded') && target.style.display === 'none') {
+      const sid = target.id.replace(/-b$/, '');
       if (sid) jtStrToggle(sid);
     }
   }
@@ -2729,16 +2761,13 @@ function highlightMechInJsonTree(container, body, mechKey) {
     if (isNaN(idx) || !sections[idx]) return;
     const section = sections[idx];
 
-    // 문자열 자동 펼침 안 함 — 부모 .jt-row만 하이라이트
+    // 문자열 펼침 + 하이라이트 (사용자 선호 방식)
     const allStr = container.querySelectorAll('.jt-str, .jt-str-expanded, .jt-str-preview');
     for (const el of allStr) {
       if (!el.textContent.includes('Contents of ' + section.path)) continue;
+      expandLongStr(el);
       expandAncestors(el);
-      const row = el.closest('.jt-row');
-      if (row) {
-        row.classList.add('mech-hl-row');
-        requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-      }
+      hlRange(el, 0, 0, true);
       break;
     }
 
