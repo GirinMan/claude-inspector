@@ -2729,29 +2729,16 @@ function highlightMechInJsonTree(container, body, mechKey) {
     if (isNaN(idx) || !sections[idx]) return;
     const section = sections[idx];
 
-    const escapedPath = esc('Contents of ' + section.path);
-    const strEls = container.querySelectorAll('.jt-str, .jt-str-expanded');
-    for (const el of strEls) {
+    // 문자열 자동 펼침 안 함 — 부모 .jt-row만 하이라이트
+    const allStr = container.querySelectorAll('.jt-str, .jt-str-expanded, .jt-str-preview');
+    for (const el of allStr) {
       if (!el.textContent.includes('Contents of ' + section.path)) continue;
-      expandLongStr(el);
       expandAncestors(el);
-      const html = el.innerHTML;
-      const start = html.indexOf(escapedPath);
-      if (start === -1) continue;
-
-      // 섹션 끝: 다음 "Contents of " 또는 </system-reminder>
-      const nextPos = html.indexOf('\n\nContents of ', start + escapedPath.length);
-      const srEndPos = html.indexOf(esc('</system-reminder>'), start);
-      let end;
-      if (nextPos !== -1 && (srEndPos === -1 || nextPos <= srEndPos)) {
-        end = nextPos;
-      } else if (srEndPos !== -1) {
-        end = srEndPos;
-        while (end > start && html[end - 1] === '\n') end--;
-      } else {
-        end = html.length;
+      const row = el.closest('.jt-row');
+      if (row) {
+        row.classList.add('mech-hl-row');
+        requestAnimationFrame(() => row.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       }
-      hlRange(el, start, end, true);
       break;
     }
 
