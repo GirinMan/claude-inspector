@@ -1,7 +1,7 @@
 require('dotenv').config();
 const Sentry = require('@sentry/electron/main');
 Sentry.init({
-  dsn: process.env.SENTRY_DSN || '',
+  dsn: process.env.SENTRY_DSN || process.env.SENTRY_CLIENT_KEY || '',
   environment: process.env.NODE_ENV || 'development',
   release: `claude-inspector@${require('./package.json').version}`,
   beforeSend(event) {
