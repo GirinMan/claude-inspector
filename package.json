@@ -24,6 +24,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "analytics.js",
       "public/**",
       "assets/icon.png",
       "assets/icon.icns",
