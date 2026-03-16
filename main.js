@@ -78,6 +78,13 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, 'public/index.html'));
 
+  // Retry on load failure (macOS quarantine scan can lock the asar on first launch)
+  win.webContents.on('did-fail-load', () => {
+    setTimeout(() => {
+      if (!win.isDestroyed()) win.loadFile(path.join(__dirname, 'public/index.html'));
+    }, 1500);
+  });
+
   win.once('ready-to-show', () => win.show());
   // Fallback: force show if ready-to-show never fires
   setTimeout(() => { if (!win.isDestroyed() && !win.isVisible()) win.show(); }, 3000);
