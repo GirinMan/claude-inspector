@@ -540,6 +540,22 @@
         </div>
       </div>
       <div class="field">
+        <label data-i18n="proxy.provider">API Provider</label>
+        <select id="proxyProvider" onchange="onProviderChange()" style="width:100%;font-size:12px;padding:6px 8px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:4px">
+          <option value="anthropic">Anthropic API (api.anthropic.com)</option>
+          <option value="bedrock">AWS Bedrock</option>
+          <option value="custom">Custom URL</option>
+        </select>
+      </div>
+      <div class="field" id="bedrockRegionField" style="display:none">
+        <label data-i18n="proxy.bedrockRegion">AWS Region</label>
+        <input type="text" id="bedrockRegion" value="us-east-1" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="ap-northeast-2" oninput="onProviderChange()">
+      </div>
+      <div class="field" id="customUrlField" style="display:none">
+        <label data-i18n="proxy.customUrl">Forward URL</label>
+        <input type="text" id="proxyCustomUrl" value="" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="https://your-api-server.com" oninput="onProviderChange()">
+      </div>
+      <div class="field">
         <label data-i18n="proxy.port">포트</label>
         <input type="number" id="proxyPort" value="9090" min="1024" max="65535" style="width:120px" oninput="updateProxyCmd()">
       </div>
@@ -606,6 +622,9 @@ const LOCALES = {
       liveCapture: '실시간 캡처',
       interceptTitle: '⚡ 실제 API 트래픽 인터셉트',
       interceptDesc: 'Claude Code CLI의 실제 API 요청을 가로채 실시간으로 시각화합니다.<br>프록시를 시작한 뒤 아래 명령으로 Claude Code를 실행하세요.',
+      provider: 'API Provider',
+      bedrockRegion: 'AWS Region',
+      customUrl: 'Forward URL',
       port: '포트',
       stopped: '중지됨',
       running: '포트 {port}에서 실행 중',
@@ -723,6 +742,9 @@ const LOCALES = {
       liveCapture: 'Live Capture',
       interceptTitle: '⚡ Live API Traffic Intercept',
       interceptDesc: 'Intercepts real API requests from the Claude Code CLI and visualizes them in real time.<br>Start the proxy, then run Claude Code with the command below.',
+      provider: 'API Provider',
+      bedrockRegion: 'AWS Region',
+      customUrl: 'Forward URL',
       port: 'Port',
       stopped: 'Stopped',
       running: 'Running on port {port}',
@@ -827,7 +849,7 @@ const LOCALES = {
       step1: 'Click <b>Start Proxy</b> below — starts a local proxy on localhost:9090',
       step2: 'Open a new terminal and run Claude Code through the proxy:',
       step3: 'Come back here and browse captured traffic in <b>Messages</b> · <b>Request</b> · <b>Analysis</b>',
-      note: '💡 The proxy runs locally only. No data is sent anywhere except directly to api.anthropic.com.',
+      note: '💡 The proxy runs locally only. No data is sent anywhere except to the configured target URL.',
       btn: 'Get Started →',
     },
   },
@@ -1060,12 +1082,39 @@ let proxyDetailMechFilter = null;
 let proxyRunning = false;
 let proxyActualPort = 9090;
 
+function getProxyTargetUrl() {
+  const provider = document.getElementById('proxyProvider').value;
+  if (provider === 'anthropic') return 'https://api.anthropic.com';
+  if (provider === 'bedrock') {
+    const region = document.getElementById('bedrockRegion').value.trim() || 'us-east-1';
+    return `https://bedrock-runtime.${region}.amazonaws.com`;
+  }
+  return document.getElementById('proxyCustomUrl').value.trim() || 'https://api.anthropic.com';
+}
+
+function getProxyRunCmd(port) {
+  const provider = document.getElementById('proxyProvider').value;
+  const base = `ANTHROPIC_BASE_URL=http://localhost:${port}`;
+  if (provider === 'bedrock') {
+    const region = document.getElementById('bedrockRegion').value.trim() || 'us-east-1';
+    return `${base} CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=${region} claude`;
+  }
+  return `${base} claude`;
+}
+
+function onProviderChange() {
+  const provider = document.getElementById('proxyProvider').value;
+  document.getElementById('bedrockRegionField').style.display = provider === 'bedrock' ? '' : 'none';
+  document.getElementById('customUrlField').style.display = provider === 'custom' ? '' : 'none';
+  updateProxyCmd();
+}
+
 function updateProxyCmd() {
   const port = document.getElementById('proxyPort').value || '9090';
   const cmdEl = document.getElementById('proxyCmdText');
   if (cmdEl && proxyRunning) {
     cmdEl.style.color = 'var(--green)';
-    cmdEl.textContent = `ANTHROPIC_BASE_URL=http://localhost:${port} claude`;
+    cmdEl.textContent = getProxyRunCmd(port);
   }
 }
 
@@ -1083,7 +1132,7 @@ function renderProxyStatus() {
     startBtn.style.background = 'var(--red)';
     if (cmdEl) {
       cmdEl.style.color = 'var(--green)';
-      cmdEl.textContent = `ANTHROPIC_BASE_URL=http://localhost:${proxyActualPort} claude`;
+      cmdEl.textContent = getProxyRunCmd(proxyActualPort);
     }
   } else {
     status.className = 'proxy-status';
@@ -1124,7 +1173,8 @@ async function toggleProxy() {
       window.electronAPI.offProxy();
 
       const port = parseInt(document.getElementById('proxyPort').value) || 9090;
-      const result = await window.electronAPI.proxyStart(port);
+      const targetUrl = getProxyTargetUrl();
+      const result = await window.electronAPI.proxyStart(port, targetUrl);
       if (result.error) {
         alert(i18n.t('proxy.startFail') + result.error);
         return;
