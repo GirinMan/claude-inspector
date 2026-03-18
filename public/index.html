@@ -1239,8 +1239,7 @@ function getProxyTargetUrl() {
 function getProxyRunCmd(port) {
   const provider = document.getElementById('proxyProvider').value;
   if (provider === 'bedrock') {
-    const region = document.getElementById('bedrockRegion').value.trim() || 'us-east-1';
-    return `ANTHROPIC_BEDROCK_BASE_URL=http://localhost:${port} CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=${region} claude`;
+    return `ANTHROPIC_BEDROCK_BASE_URL=http://localhost:${port} CLAUDE_CODE_USE_BEDROCK=1 claude`;
   }
   return `ANTHROPIC_BASE_URL=http://localhost:${port} claude`;
 }
