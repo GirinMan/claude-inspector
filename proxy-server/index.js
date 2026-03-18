@@ -119,11 +119,15 @@ const server = http.createServer((req, res) => {
   });
 });
 
+const isBedrock = targetHostname.includes('bedrock-runtime');
+const envVar = isBedrock ? 'ANTHROPIC_BEDROCK_BASE_URL' : 'ANTHROPIC_BASE_URL';
+const extraEnv = isBedrock ? ' CLAUDE_CODE_USE_BEDROCK=1' : '';
+
 server.listen(PROXY_PORT, BIND_HOST, () => {
   console.log(`Claude Inspector Proxy`);
   console.log(`  Proxy:     http://${BIND_HOST}:${PROXY_PORT}`);
   console.log(`  WebSocket: ws://${BIND_HOST}:${WS_PORT}`);
   console.log(`  Target:    ${TARGET_URL}`);
   console.log(`\nRun Claude Code with:`);
-  console.log(`  ANTHROPIC_BASE_URL=http://<this-host>:${PROXY_PORT} claude`);
+  console.log(`  ${envVar}=http://<this-host>:${PROXY_PORT}${extraEnv} claude`);
 });
