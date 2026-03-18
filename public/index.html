@@ -166,6 +166,13 @@
     .proxy-status.running { border-color: rgba(78,201,176,.4); background: rgba(78,201,176,.07); }
     .proxy-status .ps-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
     .proxy-status.running .ps-dot { background: var(--green); animation: pulse 1.5s infinite; }
+    .proxy-mode-tab {
+      padding: 7px 16px; font-size: 12px; font-weight: 600;
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: var(--dim); cursor: pointer; transition: all .15s;
+    }
+    .proxy-mode-tab:hover { color: var(--fg); }
+    .proxy-mode-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
     .proxy-cmd {
       background: var(--bg); border: 1px solid var(--border);
       border-radius: 5px; padding: 8px 10px;
@@ -531,7 +538,14 @@
       <span data-i18n="proxy.title">Proxy Control</span>
       <span class="inject-chip" style="color:var(--red);border-color:rgba(244,135,113,.3);background:rgba(244,135,113,.08)" data-i18n="proxy.liveCapture">실시간 캡처</span>
     </div>
-    <div class="config-body">
+    <!-- Mode tabs -->
+    <div style="display:flex;gap:0;padding:0 12px;border-bottom:1px solid var(--border)">
+      <button class="proxy-mode-tab active" id="proxyModeLocal" onclick="setProxyMode('local')" data-i18n="proxy.modeLocal">Local</button>
+      <button class="proxy-mode-tab" id="proxyModeRemote" onclick="setProxyMode('remote')" data-i18n="proxy.modeRemote">Remote</button>
+    </div>
+
+    <!-- Local mode -->
+    <div class="config-body" id="proxyLocalConfig">
       <div class="how-box" style="border-color:rgba(244,135,113,.25);background:rgba(244,135,113,.04)">
         <div class="how-title" style="color:var(--red)" data-i18n="proxy.interceptTitle">⚡ 실제 API 트래픽 인터셉트</div>
         <div class="how-text" data-i18n-html="proxy.interceptDesc">
@@ -573,8 +587,37 @@
         </div>
       </div>
     </div>
-    <div class="config-footer">
+    <div class="config-footer" id="proxyLocalFooter">
       <button class="btn btn-send" id="proxyStartBtn" style="flex:1;justify-content:center" onclick="toggleProxy()" data-i18n="proxy.startProxy">Start Proxy</button>
+      <button class="btn btn-copy" onclick="clearProxyCaptures()" data-i18n="proxy.clear">Clear</button>
+    </div>
+
+    <!-- Remote mode -->
+    <div class="config-body" id="proxyRemoteConfig" style="display:none">
+      <div class="how-box" style="border-color:rgba(86,156,214,.25);background:rgba(86,156,214,.04)">
+        <div class="how-title" style="color:var(--blue)" data-i18n="proxy.remoteTitle">🌐 Remote Proxy</div>
+        <div class="how-text" data-i18n-html="proxy.remoteDesc">
+          별도 서버에서 실행 중인 claude-inspector-proxy의 WebSocket에 연결하여<br>원격 트래픽을 실시간으로 수신합니다.
+        </div>
+      </div>
+      <div class="field">
+        <label data-i18n="proxy.wsUrl">WebSocket URL</label>
+        <input type="text" id="remoteWsUrl" value="ws://localhost:9091" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="ws://your-server:9091">
+      </div>
+      <div class="proxy-status" id="remoteStatus">
+        <span class="ps-dot"></span>
+        <span id="remoteStatusText" data-i18n="proxy.disconnected">연결 안됨</span>
+      </div>
+      <div class="how-box" style="border-color:var(--border);background:rgba(255,255,255,.02);margin-top:4px">
+        <div class="how-title" style="color:var(--dim);font-size:11px" data-i18n="proxy.remoteSetupTitle">서버 실행 방법</div>
+        <div class="how-text" style="font-size:11px">
+          <code style="display:block;padding:6px 8px;background:var(--bg);border-radius:4px;font-size:11px;line-height:1.5;white-space:pre;overflow-x:auto">docker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \
+  --target https://api.anthropic.com</code>
+        </div>
+      </div>
+    </div>
+    <div class="config-footer" id="proxyRemoteFooter" style="display:none">
+      <button class="btn btn-send" id="remoteConnectBtn" style="flex:1;justify-content:center" onclick="toggleRemoteProxy()" data-i18n="proxy.connect">Connect</button>
       <button class="btn btn-copy" onclick="clearProxyCaptures()" data-i18n="proxy.clear">Clear</button>
     </div>
   </div>
@@ -636,6 +679,17 @@ const LOCALES = {
       capturedRequests: '캡처된 요청',
       noCaptures: '캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small>',
       startFail: '프록시 시작 실패: ',
+      modeLocal: 'Local',
+      modeRemote: 'Remote',
+      remoteTitle: '🌐 원격 프록시',
+      remoteDesc: '별도 서버에서 실행 중인 claude-inspector-proxy의 WebSocket에 연결하여<br>원격 트래픽을 실시간으로 수신합니다.',
+      remoteSetupTitle: '서버 실행 방법',
+      wsUrl: 'WebSocket URL',
+      connect: 'Connect',
+      disconnect: 'Disconnect',
+      connected: '연결됨',
+      disconnected: '연결 안됨',
+      remoteConnFail: '연결 실패',
       selectRequest: '요청을 선택하면<br>페이로드가 표시됩니다',
       noMessages: 'messages 배열 없음',
       waitingResponse: '응답 대기 중…',
@@ -756,6 +810,17 @@ const LOCALES = {
       capturedRequests: 'Captured Requests',
       noCaptures: 'No captured requests<br><small>Start the proxy and<br>run Claude Code</small>',
       startFail: 'Failed to start proxy: ',
+      modeLocal: 'Local',
+      modeRemote: 'Remote',
+      remoteTitle: '🌐 Remote Proxy',
+      remoteDesc: 'Connect to a claude-inspector-proxy WebSocket server running on a remote host<br>to receive traffic in real-time.',
+      remoteSetupTitle: 'Server Setup',
+      wsUrl: 'WebSocket URL',
+      connect: 'Connect',
+      disconnect: 'Disconnect',
+      connected: 'Connected',
+      disconnected: 'Disconnected',
+      remoteConnFail: 'Connection failed',
       selectRequest: 'Select a request to<br>view its payload',
       noMessages: 'No messages array',
       waitingResponse: 'Waiting for response…',
@@ -1081,6 +1146,85 @@ let proxyDetailSearch = '';
 let proxyDetailMechFilter = null;
 let proxyRunning = false;
 let proxyActualPort = 9090;
+let proxyMode = 'local'; // 'local' | 'remote'
+let remoteWs = null;
+let remoteConnected = false;
+
+function setProxyMode(mode) {
+  proxyMode = mode;
+  document.getElementById('proxyModeLocal').className = 'proxy-mode-tab' + (mode === 'local' ? ' active' : '');
+  document.getElementById('proxyModeRemote').className = 'proxy-mode-tab' + (mode === 'remote' ? ' active' : '');
+  document.getElementById('proxyLocalConfig').style.display = mode === 'local' ? '' : 'none';
+  document.getElementById('proxyLocalFooter').style.display = mode === 'local' ? '' : 'none';
+  document.getElementById('proxyRemoteConfig').style.display = mode === 'remote' ? '' : 'none';
+  document.getElementById('proxyRemoteFooter').style.display = mode === 'remote' ? '' : 'none';
+}
+
+function handleProxyData(type, data) {
+  if (type === 'proxy-request') {
+    proxyCaptures.unshift(data);
+    if (proxyCaptures.length > 50) proxyCaptures.pop();
+    debouncedRenderProxyList();
+  } else if (type === 'proxy-response') {
+    const entry = proxyCaptures.find(e => e.id === data.id);
+    if (entry) {
+      entry.response = data;
+      debouncedRenderProxyList();
+      if (selectedProxyId === data.id) debouncedRenderProxyDetail();
+    }
+  }
+}
+
+async function toggleRemoteProxy() {
+  const btn = document.getElementById('remoteConnectBtn');
+  if (remoteConnected) {
+    if (remoteWs) { remoteWs.close(); remoteWs = null; }
+    remoteConnected = false;
+    renderRemoteStatus();
+    return;
+  }
+  const wsUrl = document.getElementById('remoteWsUrl').value.trim();
+  if (!wsUrl) return;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>'; }
+  try {
+    await new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      const timeout = setTimeout(() => { ws.close(); reject(new Error('Connection timeout')); }, 5000);
+      ws.onopen = () => { clearTimeout(timeout); remoteWs = ws; remoteConnected = true; resolve(); };
+      ws.onerror = () => { clearTimeout(timeout); reject(new Error(i18n.t('proxy.remoteConnFail'))); };
+      ws.onclose = () => { remoteConnected = false; remoteWs = null; renderRemoteStatus(); };
+      ws.onmessage = (evt) => {
+        try {
+          const msg = JSON.parse(evt.data);
+          handleProxyData(msg.type, msg.data);
+        } catch {}
+      };
+    });
+  } catch (err) {
+    alert(err.message || err);
+  } finally {
+    if (btn) btn.disabled = false;
+    renderRemoteStatus();
+  }
+}
+
+function renderRemoteStatus() {
+  const status = document.getElementById('remoteStatus');
+  const statusText = document.getElementById('remoteStatusText');
+  const btn = document.getElementById('remoteConnectBtn');
+  if (!status || !btn) return;
+  if (remoteConnected) {
+    status.className = 'proxy-status running';
+    if (statusText) statusText.textContent = i18n.t('proxy.connected');
+    btn.textContent = i18n.t('proxy.disconnect');
+    btn.style.background = 'var(--red)';
+  } else {
+    status.className = 'proxy-status';
+    if (statusText) statusText.textContent = i18n.t('proxy.disconnected');
+    btn.textContent = i18n.t('proxy.connect');
+    btn.style.background = 'var(--blue)';
+  }
+}
 
 function getProxyTargetUrl() {
   const provider = document.getElementById('proxyProvider').value;
@@ -1183,19 +1327,8 @@ async function toggleProxy() {
       proxyActualPort = result.port;
       document.getElementById('proxyPort').value = result.port;
 
-      window.electronAPI.onProxyRequest((data) => {
-        proxyCaptures.unshift(data);
-        if (proxyCaptures.length > 50) proxyCaptures.pop();
-        debouncedRenderProxyList();
-      });
-      window.electronAPI.onProxyResponse((data) => {
-        const entry = proxyCaptures.find(e => e.id === data.id);
-        if (entry) {
-          entry.response = data;
-          debouncedRenderProxyList();
-          if (selectedProxyId === data.id) debouncedRenderProxyDetail();
-        }
-      });
+      window.electronAPI.onProxyRequest((data) => handleProxyData('proxy-request', data));
+      window.electronAPI.onProxyResponse((data) => handleProxyData('proxy-response', data));
     }
   } catch (err) {
     console.error('toggleProxy error:', err);
@@ -2298,19 +2431,8 @@ document.getElementById('proxyPanel').style.display = 'flex';
       document.getElementById('proxyPort').value = st.port;
       // 이벤트 리스너 재등록
       window.electronAPI?.offProxy?.();
-      window.electronAPI.onProxyRequest((data) => {
-        proxyCaptures.unshift(data);
-        if (proxyCaptures.length > 50) proxyCaptures.pop();
-        debouncedRenderProxyList();
-      });
-      window.electronAPI.onProxyResponse((data) => {
-        const entry = proxyCaptures.find(e => e.id === data.id);
-        if (entry) {
-          entry.response = data;
-          debouncedRenderProxyList();
-          if (selectedProxyId === data.id) debouncedRenderProxyDetail();
-        }
-      });
+      window.electronAPI.onProxyRequest((data) => handleProxyData('proxy-request', data));
+      window.electronAPI.onProxyResponse((data) => handleProxyData('proxy-response', data));
       renderProxyStatus();
     }
   } catch {}
