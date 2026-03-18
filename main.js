@@ -119,11 +119,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-ipcMain.handle('proxy-start', (_event, port = 9090) => {
+ipcMain.handle('proxy-start', (_event, port = 9090, targetUrl = 'https://api.anthropic.com') => {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) {
     return { error: 'Invalid port: must be 1024–65535' };
   }
   if (proxyServer) return { running: true, port: proxyServer.address().port };
+
+  let target;
+  try { target = new URL(targetUrl); } catch { return { error: 'Invalid target URL' }; }
+  const targetHostname = target.hostname;
+  const targetPort = target.port || (target.protocol === 'https:' ? 443 : 80);
+  const targetProtocol = target.protocol;
+  const transport = targetProtocol === 'https:' ? https : http;
 
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
@@ -148,11 +155,11 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
         };
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('proxy-request', reqData);
 
-        const headers = Object.assign({}, req.headers, { host: 'api.anthropic.com' });
+        const headers = Object.assign({}, req.headers, { host: targetHostname });
         delete headers['accept-encoding']; // Prevent gzip response so we can parse it
-        const options = { hostname: 'api.anthropic.com', port: 443, path: req.url, method: req.method, headers };
+        const options = { hostname: targetHostname, port: targetPort, path: req.url, method: req.method, headers };
 
-        const proxyReq = https.request(options, (proxyRes) => {
+        const proxyReq = transport.request(options, (proxyRes) => {
           res.writeHead(proxyRes.statusCode, proxyRes.headers);
           const respChunks = [];
           proxyRes.on('data', chunk => { respChunks.push(chunk); res.write(chunk); });

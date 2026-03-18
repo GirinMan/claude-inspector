@@ -4,7 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
-  proxyStart: (port) => ipcRenderer.invoke('proxy-start', port),
+  proxyStart: (port, targetUrl) => ipcRenderer.invoke('proxy-start', port, targetUrl),
   proxyStop: () => ipcRenderer.invoke('proxy-stop'),
   proxyStatus: () => ipcRenderer.invoke('proxy-status'),
   onProxyRequest: (cb) => ipcRenderer.on('proxy-request', (_, data) => cb(data)),
