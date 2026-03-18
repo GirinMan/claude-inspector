@@ -1,0 +1,16 @@
+{
+  "name": "claude-inspector-proxy",
+  "version": "1.0.0",
+  "description": "Standalone proxy server for Claude Inspector — intercepts Claude Code API traffic and broadcasts via WebSocket",
+  "main": "index.js",
+  "bin": {
+    "claude-inspector-proxy": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "license": "MIT"
+}
