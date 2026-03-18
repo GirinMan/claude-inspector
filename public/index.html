@@ -563,7 +563,22 @@
       </div>
       <div class="field" id="bedrockRegionField" style="display:none">
         <label data-i18n="proxy.bedrockRegion">AWS Region</label>
-        <input type="text" id="bedrockRegion" value="us-east-1" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="ap-northeast-2" oninput="onProviderChange()">
+        <select id="bedrockRegionSelect" onchange="onBedrockRegionSelect()" style="width:100%;font-size:12px;padding:6px 8px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:4px">
+          <option value="us-east-1">US East 1 (N. Virginia)</option>
+          <option value="us-east-2">US East 2 (Ohio)</option>
+          <option value="us-west-2">US West 2 (Oregon)</option>
+          <option value="eu-west-1">EU West 1 (Ireland)</option>
+          <option value="eu-west-3">EU West 3 (Paris)</option>
+          <option value="eu-central-1">EU Central 1 (Frankfurt)</option>
+          <option value="ap-northeast-1">AP Northeast 1 (Tokyo)</option>
+          <option value="ap-northeast-2">AP Northeast 2 (Seoul)</option>
+          <option value="ap-southeast-1">AP Southeast 1 (Singapore)</option>
+          <option value="ap-southeast-2">AP Southeast 2 (Sydney)</option>
+          <option value="ap-south-1">AP South 1 (Mumbai)</option>
+          <option value="sa-east-1">SA East 1 (São Paulo)</option>
+          <option value="__custom">Custom...</option>
+        </select>
+        <input type="text" id="bedrockRegionCustom" style="display:none;width:100%;font-family:var(--mono);font-size:12px;margin-top:6px" placeholder="eu-north-1" oninput="onProviderChange()">
       </div>
       <div class="field" id="customUrlField" style="display:none">
         <label data-i18n="proxy.customUrl">Forward URL</label>
@@ -1226,13 +1241,22 @@ function renderRemoteStatus() {
   }
 }
 
+function getBedrockRegion() {
+  const sel = document.getElementById('bedrockRegionSelect').value;
+  if (sel === '__custom') return document.getElementById('bedrockRegionCustom').value.trim() || 'us-east-1';
+  return sel;
+}
+
+function onBedrockRegionSelect() {
+  const sel = document.getElementById('bedrockRegionSelect').value;
+  document.getElementById('bedrockRegionCustom').style.display = sel === '__custom' ? '' : 'none';
+  onProviderChange();
+}
+
 function getProxyTargetUrl() {
   const provider = document.getElementById('proxyProvider').value;
   if (provider === 'anthropic') return 'https://api.anthropic.com';
-  if (provider === 'bedrock') {
-    const region = document.getElementById('bedrockRegion').value.trim() || 'us-east-1';
-    return `https://bedrock-runtime.${region}.amazonaws.com`;
-  }
+  if (provider === 'bedrock') return `https://bedrock-runtime.${getBedrockRegion()}.amazonaws.com`;
   return document.getElementById('proxyCustomUrl').value.trim() || 'https://api.anthropic.com';
 }
 
