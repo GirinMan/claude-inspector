@@ -30,6 +30,32 @@ const https = require('node:https');
 let mainWin = null;
 let proxyServer = null;
 
+// Parse Bedrock AWS Event Stream into a reconstructed Anthropic message object
+function parseBedrockEventStream(buf) {
+  try {
+    let msg = null;
+    function processEvent(data) {
+      try {
+        const d = JSON.parse(data);
+        if (d.type === 'message_start') msg = Object.assign({}, d.message, { _streaming: true });
+        if (d.type === 'content_block_start' && msg) { msg.content = msg.content || []; msg.content[d.index] = Object.assign({}, d.content_block); }
+        if (d.type === 'content_block_delta' && msg) { const block = msg.content && msg.content[d.index]; if (block) { if (d.delta.type === 'text_delta') block.text = (block.text || '') + d.delta.text; if (d.delta.type === 'thinking_delta') block.thinking = (block.thinking || '') + d.delta.thinking; } }
+        if (d.type === 'message_delta' && msg) { if (d.delta) Object.assign(msg, d.delta); if (d.usage) msg.usage = Object.assign({}, msg.usage, d.usage); }
+      } catch {}
+    }
+    const str = buf.toString('utf8');
+    const regex = /\{"bytes":"([A-Za-z0-9+/=]+)"/g;
+    let m;
+    while ((m = regex.exec(str)) !== null) {
+      try {
+        const decoded = Buffer.from(m[1], 'base64').toString('utf8');
+        processEvent(decoded);
+      } catch {}
+    }
+    return msg || null;
+  } catch { return null; }
+}
+
 // Parse SSE stream into a reconstructed Anthropic message object
 function parseSseStream(text) {
   try {
@@ -119,11 +145,18 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-ipcMain.handle('proxy-start', (_event, port = 9090) => {
+ipcMain.handle('proxy-start', (_event, port = 9090, targetUrl = 'https://api.anthropic.com') => {
   if (!Number.isInteger(port) || port < 1024 || port > 65535) {
     return { error: 'Invalid port: must be 1024–65535' };
   }
   if (proxyServer) return { running: true, port: proxyServer.address().port };
+
+  let target;
+  try { target = new URL(targetUrl); } catch { return { error: 'Invalid target URL' }; }
+  const targetHostname = target.hostname;
+  const targetPort = target.port || (target.protocol === 'https:' ? 443 : 80);
+  const targetProtocol = target.protocol;
+  const transport = targetProtocol === 'https:' ? https : http;
 
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
@@ -148,11 +181,11 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
         };
         if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('proxy-request', reqData);
 
-        const headers = Object.assign({}, req.headers, { host: 'api.anthropic.com' });
+        const headers = Object.assign({}, req.headers, { host: targetHostname });
         delete headers['accept-encoding']; // Prevent gzip response so we can parse it
-        const options = { hostname: 'api.anthropic.com', port: 443, path: req.url, method: req.method, headers };
+        const options = { hostname: targetHostname, port: targetPort, path: req.url, method: req.method, headers };
 
-        const proxyReq = https.request(options, (proxyRes) => {
+        const proxyReq = transport.request(options, (proxyRes) => {
           res.writeHead(proxyRes.statusCode, proxyRes.headers);
           const respChunks = [];
           proxyRes.on('data', chunk => { respChunks.push(chunk); res.write(chunk); });
@@ -160,9 +193,11 @@ ipcMain.handle('proxy-start', (_event, port = 9090) => {
           proxyRes.on('end', () => {
             res.end();
             setImmediate(() => {
-              const respStr = Buffer.concat(respChunks).toString('utf8');
+              const respBuf = Buffer.concat(respChunks);
+              const respStr = respBuf.toString('utf8');
               let respObj = null;
-              try { respObj = JSON.parse(respStr); } catch { /* SSE stream — JSON.parse expected to fail */ }
+              try { respObj = JSON.parse(respStr); } catch { /* streaming — JSON.parse expected to fail */ }
+              if (!respObj && targetHostname.includes('bedrock-runtime')) respObj = parseBedrockEventStream(respBuf);
               if (!respObj) respObj = parseSseStream(respStr);
               if (mainWin && !mainWin.isDestroyed()) {
                 mainWin.webContents.send('proxy-response', {
