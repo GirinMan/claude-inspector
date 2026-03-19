@@ -1255,12 +1255,12 @@ function updateRemoteExamples() {
   const run = document.getElementById('remoteRunCmd');
   if (!setup || !run) return;
   const proxyHost = getRemoteProxyHost();
-  const buildCmds = 'git clone https://github.com/girinman/claude-inspector.git\ncd claude-inspector/proxy-server\ndocker build -t claude-inspector-proxy .';
+  const buildCmds = 'cd claude-inspector/proxy-server\ndocker build -t claude-inspector-proxy .';
   if (p === 'bedrock') {
-    setup.textContent = buildCmds + '\n\ndocker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \\\n  --target https://bedrock-runtime.{region}.amazonaws.com';
+    setup.textContent = buildCmds + '\n\nexport export HTTP_PROXY_PORT=9090\ndocker run -p ${HTTP}:9090 -p 9091:9091 claude-inspector-proxy \\\n  --target https://bedrock-runtime.{region}.amazonaws.com';
     run.textContent = `ANTHROPIC_BEDROCK_BASE_URL=http://${proxyHost} CLAUDE_CODE_USE_BEDROCK=1 claude`;
   } else {
-    setup.textContent = buildCmds + '\n\ndocker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \\\n  --target https://api.anthropic.com';
+    setup.textContent = buildCmds + '\n\nexport SERVER_HOST=localhost\nexport HTTP_PROXY_PORT=9090\ndocker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \\\n  --target https://api.anthropic.com';
     run.textContent = `ANTHROPIC_BASE_URL=http://${proxyHost} claude`;
   }
 }
