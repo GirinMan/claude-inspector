@@ -506,7 +506,7 @@
       <li data-i18n-html="onboard.step1"></li>
       <li>
         <span data-i18n-html="onboard.step2"></span>
-        <code class="onboard-cmd">ANTHROPIC_BASE_URL=http://localhost:9090 claude</code>
+        <code class="onboard-cmd">ANTHROPIC_BASE_URL=http://{SERVER_HOST}:{HTTP_PROXY_PORT} claude</code>
       </li>
       <li data-i18n-html="onboard.step3"></li>
     </ol>
@@ -564,6 +564,7 @@
       <div class="field" id="bedrockRegionField" style="display:none">
         <label data-i18n="proxy.bedrockRegion">AWS Region</label>
         <select id="bedrockRegionSelect" onchange="onBedrockRegionSelect()" style="width:100%;font-size:12px;padding:6px 8px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:4px">
+          <option value="ap-northeast-2" selected>AP Northeast 2 (Seoul)</option>
           <option value="us-east-1">US East 1 (N. Virginia)</option>
           <option value="us-east-2">US East 2 (Ohio)</option>
           <option value="us-west-2">US West 2 (Oregon)</option>
@@ -571,7 +572,6 @@
           <option value="eu-west-3">EU West 3 (Paris)</option>
           <option value="eu-central-1">EU Central 1 (Frankfurt)</option>
           <option value="ap-northeast-1">AP Northeast 1 (Tokyo)</option>
-          <option value="ap-northeast-2">AP Northeast 2 (Seoul)</option>
           <option value="ap-southeast-1">AP Southeast 1 (Singapore)</option>
           <option value="ap-southeast-2">AP Southeast 2 (Sydney)</option>
           <option value="ap-south-1">AP South 1 (Mumbai)</option>
@@ -617,17 +617,32 @@
       </div>
       <div class="field">
         <label data-i18n="proxy.wsUrl">WebSocket URL</label>
-        <input type="text" id="remoteWsUrl" value="ws://localhost:9091" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="ws://your-server:9091">
+        <input type="text" id="remoteWsUrl" value="ws://localhost:9091" style="width:100%;font-family:var(--mono);font-size:12px" placeholder="ws://your-server:9091" oninput="updateRemoteExamples()">
       </div>
       <div class="proxy-status" id="remoteStatus">
         <span class="ps-dot"></span>
         <span id="remoteStatusText" data-i18n="proxy.disconnected">연결 안됨</span>
       </div>
+      <div class="field">
+        <label data-i18n="proxy.provider">API Provider</label>
+        <select id="remoteProvider" onchange="updateRemoteExamples()" style="width:100%;font-size:12px;padding:6px 8px;background:var(--surface);color:var(--fg);border:1px solid var(--border);border-radius:4px">
+          <option value="anthropic">Anthropic API (api.anthropic.com)</option>
+          <option value="bedrock">AWS Bedrock</option>
+        </select>
+      </div>
       <div class="how-box" style="border-color:var(--border);background:rgba(255,255,255,.02);margin-top:4px">
-        <div class="how-title" style="color:var(--dim);font-size:11px" data-i18n="proxy.remoteSetupTitle">서버 실행 방법</div>
+        <div class="how-title" style="color:var(--dim);font-size:11px" data-i18n="proxy.remoteSetupTitle">Server Setup</div>
         <div class="how-text" style="font-size:11px">
-          <code style="display:block;padding:6px 8px;background:var(--bg);border-radius:4px;font-size:11px;line-height:1.5;white-space:pre;overflow-x:auto">docker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \
-  --target https://api.anthropic.com</code>
+          <code id="remoteSetupCmd" style="display:block;padding:6px 8px;background:var(--bg);border-radius:4px;font-size:11px;line-height:1.5;white-space:pre;overflow-x:auto"></code>
+        </div>
+      </div>
+      <div class="field">
+        <label>
+          <span data-i18n="proxy.remoteRunTitle">Run Claude Code</span>
+          <button class="copy-small" onclick="copyRemoteRunCmd()" style="text-transform:none;letter-spacing:0;font-weight:normal" data-i18n="copy.copy">Copy</button>
+        </label>
+        <div class="proxy-cmd" id="remoteRunCmdBox">
+          <span id="remoteRunCmd"></span>
         </div>
       </div>
     </div>
@@ -699,6 +714,7 @@ const LOCALES = {
       remoteTitle: '🌐 원격 프록시',
       remoteDesc: '별도 서버에서 실행 중인 claude-inspector-proxy의 WebSocket에 연결하여<br>원격 트래픽을 실시간으로 수신합니다.',
       remoteSetupTitle: '서버 실행 방법',
+      remoteRunTitle: 'Claude Code 실행',
       wsUrl: 'WebSocket URL',
       connect: 'Connect',
       disconnect: 'Disconnect',
@@ -830,6 +846,7 @@ const LOCALES = {
       remoteTitle: '🌐 Remote Proxy',
       remoteDesc: 'Connect to a claude-inspector-proxy WebSocket server running on a remote host<br>to receive traffic in real-time.',
       remoteSetupTitle: 'Server Setup',
+      remoteRunTitle: 'Run Claude Code',
       wsUrl: 'WebSocket URL',
       connect: 'Connect',
       disconnect: 'Disconnect',
@@ -1221,6 +1238,40 @@ async function toggleRemoteProxy() {
     if (btn) btn.disabled = false;
     renderRemoteStatus();
   }
+}
+
+function getRemoteProxyHost() {
+  const wsUrl = document.getElementById('remoteWsUrl').value.trim();
+  try {
+    const u = new URL(wsUrl);
+    const host = u.hostname === 'localhost' || u.hostname === '127.0.0.1' ? u.hostname : u.hostname;
+    return host + ':9090';
+  } catch { return '<proxy-host>:9090'; }
+}
+
+function updateRemoteExamples() {
+  const p = document.getElementById('remoteProvider').value;
+  const setup = document.getElementById('remoteSetupCmd');
+  const run = document.getElementById('remoteRunCmd');
+  if (!setup || !run) return;
+  const proxyHost = getRemoteProxyHost();
+  const buildCmds = 'git clone https://github.com/girinman/claude-inspector.git\ncd claude-inspector/proxy-server\ndocker build -t claude-inspector-proxy .';
+  if (p === 'bedrock') {
+    setup.textContent = buildCmds + '\n\ndocker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \\\n  --target https://bedrock-runtime.{region}.amazonaws.com';
+    run.textContent = `ANTHROPIC_BEDROCK_BASE_URL=http://${proxyHost} CLAUDE_CODE_USE_BEDROCK=1 claude`;
+  } else {
+    setup.textContent = buildCmds + '\n\ndocker run -p 9090:9090 -p 9091:9091 claude-inspector-proxy \\\n  --target https://api.anthropic.com';
+    run.textContent = `ANTHROPIC_BASE_URL=http://${proxyHost} claude`;
+  }
+}
+
+function copyRemoteRunCmd() {
+  const el = document.getElementById('remoteRunCmd');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const btn = document.querySelector('[onclick="copyRemoteRunCmd()"]');
+    if (btn) { const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1500); }
+  }).catch(e => console.error('copy failed', e));
 }
 
 function renderRemoteStatus() {
@@ -2438,6 +2489,7 @@ function isNewerVersion(latest, current) {
 
 // Apply initial i18n (after DOM is ready)
 applyI18n();
+updateRemoteExamples();
 
 // Show proxy panel directly (simulator removed)
 document.getElementById('proxyPanel').style.display = 'flex';
