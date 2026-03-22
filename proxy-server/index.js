@@ -4,6 +4,8 @@
 const http = require('node:http');
 const https = require('node:https');
 const { WebSocketServer } = require('ws');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -16,12 +18,83 @@ const PROXY_PORT = parseInt(arg('port', '9090'), 10);
 const WS_PORT = parseInt(arg('ws-port', '9091'), 10);
 const TARGET_URL = arg('target', 'https://api.anthropic.com');
 const BIND_HOST = arg('host', '0.0.0.0');
+const LOG_DIR = arg('log-dir', '/app/logs');
+const ENABLE_LOGGING = args.includes('--enable-logging');
 
 let target;
 try { target = new URL(TARGET_URL); } catch { console.error('Invalid --target URL:', TARGET_URL); process.exit(1); }
 const targetHostname = target.hostname;
 const targetPort = parseInt(target.port, 10) || (target.protocol === 'https:' ? 443 : 80);
 const transport = target.protocol === 'https:' ? https : http;
+
+// ── Logging utilities ───────────────────────────────────────────────────────
+function initLogDir() {
+  if (!ENABLE_LOGGING) return;
+  try {
+    fs.mkdirSync(LOG_DIR, { recursive: true });
+    console.log(`  Logging:   ${LOG_DIR} (enabled)`);
+  } catch (err) {
+    console.error(`Failed to create log directory: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+function analyzeMessage(bodyObj) {
+  if (!bodyObj) return null;
+
+  const analysis = {
+    model: bodyObj.model || 'unknown',
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalCost: 0,
+  };
+
+  // Extract usage from response
+  if (bodyObj.usage) {
+    analysis.inputTokens = bodyObj.usage.input_tokens || 0;
+    analysis.outputTokens = bodyObj.usage.output_tokens || 0;
+    analysis.cacheCreationTokens = bodyObj.usage.cache_creation_input_tokens || 0;
+    analysis.cacheReadTokens = bodyObj.usage.cache_read_input_tokens || 0;
+  }
+
+  // Calculate cost (simplified, based on Claude Sonnet pricing)
+  const inputCostPer1M = 3.0;   // $3 per 1M input tokens
+  const outputCostPer1M = 15.0; // $15 per 1M output tokens
+  const cacheCostPer1M = 3.75;  // $3.75 per 1M cache write tokens
+  const cacheReadCostPer1M = 0.3; // $0.30 per 1M cache read tokens
+
+  analysis.totalCost =
+    (analysis.inputTokens / 1_000_000) * inputCostPer1M +
+    (analysis.outputTokens / 1_000_000) * outputCostPer1M +
+    (analysis.cacheCreationTokens / 1_000_000) * cacheCostPer1M +
+    (analysis.cacheReadTokens / 1_000_000) * cacheReadCostPer1M;
+
+  return analysis;
+}
+
+function writeLog(reqId, reqData, respData, analysis) {
+  if (!ENABLE_LOGGING) return;
+
+  try {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+      timestamp,
+      id: reqId,
+      request: reqData,
+      response: respData,
+      analysis: analysis || {},
+    };
+
+    const fileName = `${timestamp.replace(/[:.]/g, '-')}_${reqId}.json`;
+    const filePath = path.join(LOG_DIR, fileName);
+
+    fs.writeFileSync(filePath, JSON.stringify(logEntry, null, 2));
+  } catch (err) {
+    console.error(`Failed to write log: ${err.message}`);
+  }
+}
 
 // ── Bedrock AWS Event Stream parser ─────────────────────────────────────────
 function parseBedrockEventStream(buf) {
@@ -129,10 +202,21 @@ const server = http.createServer((req, res) => {
           try { respObj = JSON.parse(respStr); } catch {}
           if (!respObj && isBedrock) respObj = parseBedrockEventStream(respBuf);
           if (!respObj) respObj = parseSseStream(respStr);
-          broadcast('proxy-response', {
-            id: reqId, status: proxyRes.statusCode,
+
+          const respData = {
+            id: reqId,
+            status: proxyRes.statusCode,
+            headers: proxyRes.headers,
             body: respObj || respStr.slice(0, 4000),
-          });
+          };
+
+          broadcast('proxy-response', respData);
+
+          // Write log if enabled
+          if (ENABLE_LOGGING && respObj) {
+            const analysis = analyzeMessage(respObj);
+            writeLog(reqId, reqData, respData, analysis);
+          }
         });
       });
     });
@@ -140,7 +224,13 @@ const server = http.createServer((req, res) => {
     proxyReq.on('error', (err) => {
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
-      broadcast('proxy-response', { id: reqId, error: err.message });
+      const respData = { id: reqId, status: 502, error: err.message };
+      broadcast('proxy-response', respData);
+
+      // Write error log if enabled
+      if (ENABLE_LOGGING) {
+        writeLog(reqId, reqData, respData, { error: err.message });
+      }
     });
 
     proxyReq.end(bodyBuf);
@@ -151,11 +241,17 @@ const isBedrock = targetHostname.includes('bedrock-runtime');
 const envVar = isBedrock ? 'ANTHROPIC_BEDROCK_BASE_URL' : 'ANTHROPIC_BASE_URL';
 const extraEnv = isBedrock ? ' CLAUDE_CODE_USE_BEDROCK=1' : '';
 
+// Initialize log directory
+initLogDir();
+
 server.listen(PROXY_PORT, BIND_HOST, () => {
   console.log(`Claude Inspector Proxy`);
   console.log(`  Proxy:     http://${BIND_HOST}:${PROXY_PORT}`);
   console.log(`  WebSocket: ws://${BIND_HOST}:${WS_PORT}`);
   console.log(`  Target:    ${TARGET_URL}`);
+  if (!ENABLE_LOGGING) {
+    console.log(`  Logging:   disabled (use --enable-logging to enable)`);
+  }
   console.log(`\nRun Claude Code with:`);
   console.log(`  ${envVar}=http://<this-host>:${PROXY_PORT}${extraEnv} claude`);
 });

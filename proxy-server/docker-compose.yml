@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  claude-inspector-proxy:
+    build: .
+    container_name: claude-inspector-proxy
+    ports:
+      - "9090:9090"  # HTTP proxy
+      - "9091:9091"  # WebSocket
+    volumes:
+      - ./logs:/app/logs  # Mount logs directory for persistence
+    command: >
+      --target https://api.anthropic.com
+      --enable-logging
+    restart: unless-stopped
+
+  # Alternative: AWS Bedrock proxy with logging
+  # claude-inspector-proxy-bedrock:
+  #   build: .
+  #   container_name: claude-inspector-proxy-bedrock
+  #   ports:
+  #     - "9090:9090"
+  #     - "9091:9091"
+  #   volumes:
+  #     - ./logs:/app/logs
+  #   command: >
+  #     --target https://bedrock-runtime.ap-northeast-2.amazonaws.com
+  #     --enable-logging
+  #   restart: unless-stopped
