@@ -6,11 +6,14 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "start:linux": "electron . --no-sandbox",
     "dev": "electron . --enable-logging",
+    "dev:linux": "electron . --enable-logging --no-sandbox",
     "predist": "node -e \"const {execSync}=require('child_process');const fs=require('fs');const hash=execSync('git rev-parse --short HEAD').toString().trim();const pkg=require('./package.json');fs.writeFileSync('public/build-info.json',JSON.stringify({version:pkg.version,hash,built:new Date().toISOString()}))\"",
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "node --test tests/unit/*.mjs",
     "test:e2e": "playwright test"
@@ -48,6 +51,27 @@
     },
     "win": {
       "target": "nsis"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "Development",
+      "artifactName": "Claude-Inspector-${version}-${arch}.${ext}",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
     }
   },
   "dependencies": {

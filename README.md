@@ -7,11 +7,12 @@
 MITM proxy that intercepts Claude Code CLI traffic in real-time<br>
 and visualizes all 5 prompt augmentation mechanisms.
 
-[Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [Tech Stack](#tech-stack)
+[Features](#features) · [Install](#install) · [What You'll Learn](#what-youll-learn) · [Proxy Mode](#proxy-mode) · [Tech Stack](#tech-stack)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/kangraemin/claude-inspector)](https://github.com/kangraemin/claude-inspector/releases/latest)
 [![macOS](https://img.shields.io/badge/macOS-arm64%20%7C%20x64-black)](https://github.com/kangraemin/claude-inspector/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-arm64%20%7C%20x64-orange)](https://github.com/kangraemin/claude-inspector/releases/latest)
 
 **English** | [한국어](README.ko.md)
 
@@ -30,6 +31,31 @@ and visualizes all 5 prompt augmentation mechanisms.
 <p align="center">
   <img src="public/screenshots/en-3.png" width="100%" alt="Proxy — Request view" />
 </p>
+
+## Features
+
+### 🔍 Local & Remote Proxy Modes
+- **Local Mode**: Run MITM proxy on your machine (`localhost:9090`)
+- **Remote Mode**: Connect to a remote proxy server via WebSocket for distributed debugging
+- Switch between modes seamlessly with tab-based UI
+
+### 🌐 Multi-Provider Support
+- **Anthropic Direct API**: Intercept traffic to `api.anthropic.com`
+- **AWS Bedrock**: Full support for Amazon Bedrock Claude API
+  - AWS Event Stream parser (handles base64-encoded streaming responses)
+  - Pre-configured AWS region selector (12 major regions + custom)
+  - Automatic `ANTHROPIC_BEDROCK_BASE_URL` configuration
+
+### 🖥️ Cross-Platform
+- **macOS**: arm64 & x64 (`.dmg` via Homebrew or direct download)
+- **Linux**: arm64 & x64 (`.AppImage` & `.deb` packages)
+- **Windows**: x64 (NSIS installer)
+
+### 📊 Real-Time Traffic Analysis
+- Live request/response capture with syntax highlighting
+- Token cost breakdown per request
+- Message flow visualization
+- SSE stream reassembly into complete JSON
 
 ## What You'll Learn
 
@@ -138,19 +164,41 @@ The Inspector captures both calls side by side, so you can compare what each one
 
 ## Install
 
-### Homebrew (Recommended)
+### macOS
+
+#### Homebrew (Recommended)
 
 ```bash
 brew install --cask kangraemin/tap/claude-inspector && sleep 2 && open -a "Claude Inspector"
 ```
 
-### Direct Download
+#### Direct Download
 
 Download the `.dmg` from the [Releases](https://github.com/kangraemin/claude-inspector/releases/latest) page.
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
 | [Claude-Inspector-arm64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) | [Claude-Inspector-x64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) |
+
+### Linux
+
+Download from the [Releases](https://github.com/kangraemin/claude-inspector/releases/latest) page:
+
+| Format | Description |
+|---|---|
+| `.AppImage` | Universal Linux binary (x64/arm64) - no installation required, just make executable and run |
+| `.deb` | Debian/Ubuntu package (x64/arm64) |
+
+**AppImage:**
+```bash
+chmod +x Claude-Inspector-*.AppImage
+./Claude-Inspector-*.AppImage
+```
+
+**Debian/Ubuntu:**
+```bash
+sudo dpkg -i Claude-Inspector-*.deb
+```
 
 ### Upgrade
 
@@ -166,6 +214,7 @@ brew uninstall --cask claude-inspector
 
 ## Development
 
+### macOS / Windows
 ```bash
 git clone https://github.com/kangraemin/claude-inspector.git
 cd claude-inspector
@@ -173,22 +222,62 @@ npm install
 npm start
 ```
 
+### Linux (Ubuntu/Debian)
+```bash
+git clone https://github.com/kangraemin/claude-inspector.git
+cd claude-inspector
+npm install
+npm run start:linux  # Uses --no-sandbox flag required for Linux
+```
+
+**Building for Linux:**
+```bash
+npm run dist:linux  # Builds AppImage and .deb packages
+```
+
 ## Proxy Mode
 
-Intercept **real** Claude Code CLI traffic via a local MITM proxy.
+Intercept **real** Claude Code CLI traffic via a local or remote MITM proxy.
+
+### Local Mode (Default)
 
 ```
-Claude Code CLI  →  Inspector (localhost:9090)  →  api.anthropic.com
+Claude Code CLI  →  Inspector (localhost:9090)  →  api.anthropic.com / Bedrock
 ```
 
-**1.** Click **Start Proxy** in the app<br>
-**2.** Run Claude Code through the proxy:
+**1.** Click **Start Proxy** in the app (Local tab)<br>
+**2.** Choose your target provider:
+   - **Anthropic**: Direct API (`api.anthropic.com`)
+   - **Bedrock**: Amazon Bedrock (select AWS region from dropdown)
 
+**3.** Run Claude Code through the proxy:
+
+**Anthropic API:**
 ```bash
 ANTHROPIC_BASE_URL=http://localhost:9090 claude
 ```
 
-**3.** Every API request/response is captured in real-time.
+**AWS Bedrock:**
+```bash
+ANTHROPIC_BEDROCK_BASE_URL=http://localhost:9090 claude
+```
+
+**4.** Every API request/response is captured in real-time.
+
+### Remote Mode
+
+Connect to a remote proxy server for distributed debugging:
+
+**1.** Switch to **Remote** tab<br>
+**2.** Enter WebSocket URL (e.g., `ws://your-server:9091`)<br>
+**3.** Click **Connect**
+
+Use cases:
+- Debug Claude Code running on a remote server
+- Team collaboration (multiple developers monitoring same traffic)
+- Docker/container environments
+
+> 🐳 **Remote Proxy Server**: You can deploy the standalone proxy server using Docker. See `proxy-server/` directory for details.
 
 ## Tech Stack
 

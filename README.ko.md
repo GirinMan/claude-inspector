@@ -7,11 +7,12 @@
 Claude Code CLI 트래픽을 실시간으로 가로채<br>
 5가지 프롬프트 증강 메커니즘을 모두 시각화하는 MITM 프록시.
 
-[설치](#설치) · [배울 수 있는 것들](#배울-수-있는-것들) · [프록시 모드](#프록시-모드) · [기술 스택](#기술-스택)
+[기능](#기능) · [설치](#설치) · [배울 수 있는 것들](#배울-수-있는-것들) · [프록시 모드](#프록시-모드) · [기술 스택](#기술-스택)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/kangraemin/claude-inspector)](https://github.com/kangraemin/claude-inspector/releases/latest)
 [![macOS](https://img.shields.io/badge/macOS-arm64%20%7C%20x64-black)](https://github.com/kangraemin/claude-inspector/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-arm64%20%7C%20x64-orange)](https://github.com/kangraemin/claude-inspector/releases/latest)
 
 [English](README.md) | **한국어**
 
@@ -30,6 +31,31 @@ Claude Code CLI 트래픽을 실시간으로 가로채<br>
 <p align="center">
   <img src="public/screenshots/ko-3.png" width="100%" alt="Proxy — Request 뷰" />
 </p>
+
+## 기능
+
+### 🔍 로컬 및 원격 프록시 모드
+- **로컬 모드**: 내 컴퓨터에서 MITM 프록시 실행 (`localhost:9090`)
+- **원격 모드**: WebSocket을 통해 원격 프록시 서버에 연결하여 분산 디버깅
+- 탭 기반 UI로 모드 간 원활한 전환
+
+### 🌐 다중 제공자 지원
+- **Anthropic 직접 API**: `api.anthropic.com` 트래픽 인터셉트
+- **AWS Bedrock**: Amazon Bedrock Claude API 완전 지원
+  - AWS Event Stream 파서 (base64로 인코딩된 스트리밍 응답 처리)
+  - 사전 구성된 AWS 리전 선택기 (주요 12개 리전 + 커스텀)
+  - 자동 `ANTHROPIC_BEDROCK_BASE_URL` 구성
+
+### 🖥️ 크로스 플랫폼
+- **macOS**: arm64 & x64 (Homebrew 또는 직접 다운로드로 `.dmg` 제공)
+- **Linux**: arm64 & x64 (`.AppImage` & `.deb` 패키지)
+- **Windows**: x64 (NSIS 인스톨러)
+
+### 📊 실시간 트래픽 분석
+- 구문 강조가 적용된 실시간 요청/응답 캡처
+- 요청별 토큰 비용 분석
+- 메시지 흐름 시각화
+- SSE 스트림을 완전한 JSON으로 재조립
 
 ## 배울 수 있는 것들
 
@@ -138,19 +164,41 @@ Inspector는 부모와 서브 에이전트 호출을 모두 캡처하므로, 각
 
 ## 설치
 
-### Homebrew (권장)
+### macOS
+
+#### Homebrew (권장)
 
 ```bash
 brew install --cask kangraemin/tap/claude-inspector && sleep 2 && open -a "Claude Inspector"
 ```
 
-### 직접 다운로드
+#### 직접 다운로드
 
 [Releases](https://github.com/kangraemin/claude-inspector/releases/latest) 페이지에서 `.dmg`를 다운로드하세요.
 
 | Mac (Apple Silicon) | Mac (Intel) |
 |---|---|
 | [Claude-Inspector-arm64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) | [Claude-Inspector-x64.dmg](https://github.com/kangraemin/claude-inspector/releases/latest) |
+
+### Linux
+
+[Releases](https://github.com/kangraemin/claude-inspector/releases/latest) 페이지에서 다운로드:
+
+| 형식 | 설명 |
+|---|---|
+| `.AppImage` | 범용 Linux 바이너리 (x64/arm64) - 설치 불필요, 실행 권한만 부여하고 실행 |
+| `.deb` | Debian/Ubuntu 패키지 (x64/arm64) |
+
+**AppImage:**
+```bash
+chmod +x Claude-Inspector-*.AppImage
+./Claude-Inspector-*.AppImage
+```
+
+**Debian/Ubuntu:**
+```bash
+sudo dpkg -i Claude-Inspector-*.deb
+```
 
 ### 업그레이드
 
@@ -166,6 +214,7 @@ brew uninstall --cask claude-inspector
 
 ## 개발 환경
 
+### macOS / Windows
 ```bash
 git clone https://github.com/kangraemin/claude-inspector.git
 cd claude-inspector
@@ -173,22 +222,62 @@ npm install
 npm start
 ```
 
+### Linux (Ubuntu/Debian)
+```bash
+git clone https://github.com/kangraemin/claude-inspector.git
+cd claude-inspector
+npm install
+npm run start:linux  # Linux에 필요한 --no-sandbox 플래그 사용
+```
+
+**Linux용 빌드:**
+```bash
+npm run dist:linux  # AppImage 및 .deb 패키지 빌드
+```
+
 ## 프록시 모드
 
-로컬 MITM 프록시를 통해 **실제** Claude Code CLI 트래픽을 인터셉트합니다.
+로컬 또는 원격 MITM 프록시를 통해 **실제** Claude Code CLI 트래픽을 인터셉트합니다.
+
+### 로컬 모드 (기본)
 
 ```
-Claude Code CLI  →  Inspector (localhost:9090)  →  api.anthropic.com
+Claude Code CLI  →  Inspector (localhost:9090)  →  api.anthropic.com / Bedrock
 ```
 
-**1.** 앱에서 **Start Proxy** 클릭<br>
-**2.** 프록시를 통해 Claude Code 실행:
+**1.** 앱에서 **Start Proxy** 클릭 (Local 탭)<br>
+**2.** 대상 제공자 선택:
+   - **Anthropic**: 직접 API (`api.anthropic.com`)
+   - **Bedrock**: Amazon Bedrock (드롭다운에서 AWS 리전 선택)
 
+**3.** 프록시를 통해 Claude Code 실행:
+
+**Anthropic API:**
 ```bash
 ANTHROPIC_BASE_URL=http://localhost:9090 claude
 ```
 
-**3.** 모든 API 요청/응답이 실시간으로 캡처됩니다.
+**AWS Bedrock:**
+```bash
+ANTHROPIC_BEDROCK_BASE_URL=http://localhost:9090 claude
+```
+
+**4.** 모든 API 요청/응답이 실시간으로 캡처됩니다.
+
+### 원격 모드
+
+분산 디버깅을 위해 원격 프록시 서버에 연결:
+
+**1.** **Remote** 탭으로 전환<br>
+**2.** WebSocket URL 입력 (예: `ws://your-server:9091`)<br>
+**3.** **Connect** 클릭
+
+사용 사례:
+- 원격 서버에서 실행 중인 Claude Code 디버깅
+- 팀 협업 (여러 개발자가 동일한 트래픽 모니터링)
+- Docker/컨테이너 환경
+
+> 🐳 **원격 프록시 서버**: 독립 실행형 프록시 서버를 Docker로 배포할 수 있습니다. 자세한 내용은 `proxy-server/` 디렉토리를 참조하세요.
 
 ## 기술 스택
 
