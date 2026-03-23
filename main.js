@@ -22,8 +22,9 @@ Sentry.init({
 
 const analytics = require('./analytics');
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const http = require('node:http');
 const https = require('node:https');
 
@@ -257,3 +258,74 @@ ipcMain.handle('proxy-stop', () => {
 });
 
 app.on('before-quit', () => { if (proxyServer) proxyServer.close(); });
+
+// ─── History ──────────────────────────────────────────────────────────────
+function getHistoryDir() {
+  const dir = path.join(app.getPath('userData'), 'history');
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function sanitizeFilename(s) {
+  return String(s).replace(/[^a-zA-Z0-9가-힣_-]/g, '_').slice(0, 60);
+}
+
+ipcMain.handle('history-save', (_event, { label, captures }) => {
+  const dir = getHistoryDir();
+  const ts = new Date().toISOString();
+  const fname = `${ts.replace(/[:.]/g, '-')}-${sanitizeFilename(label)}.json`;
+  const data = { version: 1, savedAt: ts, label, captures };
+  fs.writeFileSync(path.join(dir, fname), JSON.stringify(data, null, 2), 'utf8');
+  return { ok: true, filename: fname };
+});
+
+ipcMain.handle('history-list', () => {
+  const dir = getHistoryDir();
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+  const list = files.map(f => {
+    try {
+      const raw = fs.readFileSync(path.join(dir, f), 'utf8');
+      const d = JSON.parse(raw);
+      return { filename: f, label: d.label || f, savedAt: d.savedAt, count: (d.captures || []).length };
+    } catch { return null; }
+  }).filter(Boolean);
+  list.sort((a, b) => (b.savedAt || '').localeCompare(a.savedAt || ''));
+  return list;
+});
+
+ipcMain.handle('history-load', (_event, { filename }) => {
+  const fpath = path.join(getHistoryDir(), path.basename(filename));
+  if (!fs.existsSync(fpath)) return { error: 'File not found' };
+  const raw = fs.readFileSync(fpath, 'utf8');
+  return JSON.parse(raw);
+});
+
+ipcMain.handle('history-delete', (_event, { filename }) => {
+  const fpath = path.join(getHistoryDir(), path.basename(filename));
+  if (fs.existsSync(fpath)) fs.unlinkSync(fpath);
+  return { ok: true };
+});
+
+ipcMain.handle('history-export', async (_event, { label, captures }) => {
+  const ts = new Date().toISOString();
+  const data = { version: 1, savedAt: ts, label, captures };
+  const result = await dialog.showSaveDialog(mainWin, {
+    defaultPath: `claude-inspector-${sanitizeFilename(label)}.json`,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2), 'utf8');
+  return { ok: true, filePath: result.filePath };
+});
+
+ipcMain.handle('history-import', async () => {
+  const result = await dialog.showOpenDialog(mainWin, {
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+    properties: ['openFile'],
+  });
+  if (result.canceled || !result.filePaths.length) return { canceled: true };
+  const raw = fs.readFileSync(result.filePaths[0], 'utf8');
+  const data = JSON.parse(raw);
+  if (!data.captures || !Array.isArray(data.captures)) return { error: 'Invalid format' };
+  return data;
+});
