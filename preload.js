@@ -13,4 +13,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.removeAllListeners('proxy-request');
     ipcRenderer.removeAllListeners('proxy-response');
   },
+  historySave: (data) => ipcRenderer.invoke('history-save', data),
+  historyList: () => ipcRenderer.invoke('history-list'),
+  historyLoad: (filename) => ipcRenderer.invoke('history-load', { filename }),
+  historyDelete: (filename) => ipcRenderer.invoke('history-delete', { filename }),
+  historyExport: (data) => ipcRenderer.invoke('history-export', data),
+  historyImport: () => ipcRenderer.invoke('history-import'),
 });

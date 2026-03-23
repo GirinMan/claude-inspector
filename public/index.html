@@ -189,6 +189,77 @@
     .prx-path { font-size: 11px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
     .prx-model { font-size: 10px; color: var(--dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .prx-ts { font-size: 10px; color: var(--dim); opacity: .6; flex-shrink: 0; margin-left: 6px; }
+
+    /* ── History / Select mode ── */
+    .prx-checkbox { width: 14px; height: 14px; margin-right: 8px; flex-shrink: 0; accent-color: var(--blue); cursor: pointer; }
+    .prx-select-bar {
+      display: none; align-items: center; gap: 8px; padding: 6px 12px;
+      background: rgba(86,156,214,.08); border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .prx-select-bar.visible { display: flex; }
+    .prx-select-bar button {
+      padding: 3px 10px; font-size: 11px; border-radius: 4px; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text); transition: all .15s;
+    }
+    .prx-select-bar button:hover { background: var(--border); }
+    .prx-select-bar .sel-count { font-size: 11px; color: var(--dim); margin-left: auto; }
+    .history-modal {
+      display: none; position: absolute; inset: 0; z-index: 100;
+      background: rgba(0,0,0,.55); align-items: center; justify-content: center;
+    }
+    .history-modal.visible { display: flex; }
+    .history-modal-box {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      width: 420px; max-height: 70vh; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .history-modal-header {
+      padding: 14px 16px; font-size: 13px; font-weight: 600;
+      border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;
+    }
+    .history-modal-header button {
+      background: none; border: none; color: var(--dim); cursor: pointer; font-size: 16px;
+    }
+    .history-modal-list { flex: 1; overflow-y: auto; padding: 8px; }
+    .history-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border-radius: 6px; cursor: default; transition: background .12s;
+    }
+    .history-item:hover { background: var(--surface2); }
+    .history-item-info { flex: 1; overflow: hidden; }
+    .history-item-label { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-item-meta { font-size: 10px; color: var(--dim); margin-top: 2px; }
+    .history-item button {
+      padding: 3px 9px; font-size: 11px; border-radius: 4px; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text); flex-shrink: 0;
+    }
+    .history-item button:hover { background: var(--border); }
+    .history-item button.del { color: var(--red); }
+    .history-modal-footer {
+      padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px;
+    }
+    .history-modal-footer button {
+      flex: 1; padding: 7px; font-size: 12px; border-radius: 5px; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    }
+    .history-modal-footer button:hover { background: var(--border); }
+    .history-badge {
+      display: none; align-items: center; gap: 6px; padding: 5px 12px;
+      background: rgba(197,134,192,.08); border-bottom: 1px solid var(--border); flex-shrink: 0; font-size: 11px;
+    }
+    .history-badge.visible { display: flex; }
+    .history-badge span { color: var(--purple); }
+    .history-badge button {
+      margin-left: auto; padding: 2px 8px; font-size: 10px; border-radius: 4px; cursor: pointer;
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    }
+    .history-badge button:hover { background: var(--border); }
+    .panel-header .hist-btns { display: flex; gap: 4px; }
+    .panel-header .hist-btns button {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--dim); cursor: pointer; padding: 2px 7px; font-size: 10px; transition: all .15s;
+    }
+    .panel-header .hist-btns button:hover { color: var(--text); background: var(--surface2); }
+
     .dtabs {
       display: flex; gap: 4px; padding: 7px 12px;
       border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
@@ -658,6 +729,21 @@
       <div class="panel-header">
         <span data-i18n="proxy.capturedRequests">캡처된 요청</span>
         <span style="font-size:10px;color:var(--dim)" id="proxyCount">0</span>
+        <div class="hist-btns">
+          <button onclick="enterSelectMode()" data-i18n-title="history.save" title="Save">💾</button>
+          <button onclick="openHistoryModal()" data-i18n-title="history.load" title="Load">📂</button>
+        </div>
+      </div>
+      <div class="history-badge" id="historyBadge">
+        <span id="historyBadgeLabel"></span>
+        <button onclick="backToLive()" data-i18n="history.backToLive">Back to Live</button>
+      </div>
+      <div class="prx-select-bar" id="proxySelectBar">
+        <button onclick="toggleSelectAll()" data-i18n="history.selectAll">Select All</button>
+        <button onclick="saveSelectedToApp()" data-i18n="history.saveToApp">Save to App</button>
+        <button onclick="exportSelectedAsJson()" data-i18n="history.exportJson">Export JSON</button>
+        <button onclick="exitSelectMode()" data-i18n="history.cancel">Cancel</button>
+        <span class="sel-count" id="proxySelCount">0</span>
       </div>
       <div class="hist-list" id="proxyList">
         <div class="hist-empty" data-i18n-html="proxy.noCaptures">캡처된 요청 없음<br><small>프록시를 시작하고<br>Claude Code를 실행하세요</small></div>
@@ -675,6 +761,21 @@
         <div class="proxy-empty">
           <span style="font-size:28px">🔍</span>
           <span data-i18n-html="proxy.selectRequest">요청을 선택하면<br>페이로드가 표시됩니다</span>
+        </div>
+      </div>
+    </div>
+    <!-- History Modal -->
+    <div class="history-modal" id="historyModal" onclick="if(event.target===this)closeHistoryModal()">
+      <div class="history-modal-box">
+        <div class="history-modal-header">
+          <span data-i18n="history.savedSessions">Saved Sessions</span>
+          <button onclick="closeHistoryModal()">&times;</button>
+        </div>
+        <div class="history-modal-list" id="historyModalList">
+          <div style="padding:20px;text-align:center;color:var(--dim)" data-i18n="history.noSaved">No saved sessions</div>
+        </div>
+        <div class="history-modal-footer">
+          <button onclick="importHistory()" data-i18n="history.importJson">Import JSON</button>
         </div>
       </div>
     </div>
@@ -817,6 +918,24 @@ const LOCALES = {
       note: '💡 프록시는 로컬에서만 동작합니다. 외부로 데이터가 전송되지 않습니다.',
       btn: '시작하기 →',
     },
+    history: {
+      save: '저장',
+      load: '불러오기',
+      selectAll: '전체 선택',
+      cancel: '취소',
+      saveSelected: '선택 항목 저장',
+      saveToApp: '앱에 저장',
+      exportJson: 'JSON 내보내기',
+      importJson: 'JSON 가져오기',
+      enterLabel: '세션 이름을 입력하세요:',
+      saved: '저장되었습니다',
+      noSaved: '저장된 세션 없음',
+      savedSessions: '저장된 세션',
+      loadedFrom: '불러옴: {name}',
+      backToLive: '라이브로 돌아가기',
+      confirmDelete: '이 세션을 삭제하시겠습니까?',
+      items: '{count}개 캡처',
+    },
   },
   en: {
     header: {
@@ -948,6 +1067,24 @@ const LOCALES = {
       step3: 'Come back here and browse captured traffic in <b>Messages</b> · <b>Request</b> · <b>Analysis</b>',
       note: '💡 The proxy runs locally only. No data is sent anywhere except to the configured target URL.',
       btn: 'Get Started →',
+    },
+    history: {
+      save: 'Save',
+      load: 'Load',
+      selectAll: 'Select All',
+      cancel: 'Cancel',
+      saveSelected: 'Save Selected',
+      saveToApp: 'Save to App',
+      exportJson: 'Export JSON',
+      importJson: 'Import JSON',
+      enterLabel: 'Enter session name:',
+      saved: 'Saved successfully',
+      noSaved: 'No saved sessions',
+      savedSessions: 'Saved Sessions',
+      loadedFrom: 'Loaded: {name}',
+      backToLive: 'Back to Live',
+      confirmDelete: 'Delete this session?',
+      items: '{count} captures',
     },
   },
 };
@@ -1194,6 +1331,12 @@ function setProxyMode(mode) {
 
 function handleProxyData(type, data) {
   if (type === 'proxy-request') {
+    if (loadedHistoryLabel) {
+      loadedHistoryLabel = null;
+      proxyCaptures = [];
+      selectedProxyId = null;
+      document.getElementById('historyBadge')?.classList.remove('visible');
+    }
     proxyCaptures.unshift(data);
     if (proxyCaptures.length > 50) proxyCaptures.pop();
     debouncedRenderProxyList();
@@ -1429,8 +1572,13 @@ function renderProxyList() {
     const statusBadge = e.response
       ? `<span style="font-size:10px;font-family:'SF Mono',monospace;flex-shrink:0;color:${e.response.status < 400 ? 'var(--green)' : 'var(--red)'}">${e.response.status || 'ERR'}</span>`
       : `<span style="font-size:10px;color:var(--dim);flex-shrink:0">…</span>`;
-    return `<div class="prx-entry${sel}" onclick="selectProxyEntry(${e.id})">
+    const chk = proxySelectMode
+      ? `<input type="checkbox" class="prx-checkbox" ${proxySelectedIds.has(e.id) ? 'checked' : ''} onclick="toggleProxySelect(${e.id}, event)">`
+      : '';
+    const onclick = proxySelectMode ? `toggleProxySelect(${e.id})` : `selectProxyEntry(${e.id})`;
+    return `<div class="prx-entry${sel}" onclick="${onclick}">
       <div style="display:flex;align-items:center;overflow:hidden">
+        ${chk}
         <span class="prx-method">${esc(e.method)}</span>
         <span class="prx-path">${esc(e.path)}</span>
         ${statusBadge}
@@ -2340,9 +2488,154 @@ function showDetailTab(tab) {
   renderProxyDetail();
 }
 
+// ─── History / Select mode ────────────────────────────────────────────────
+let proxySelectMode = false;
+let proxySelectedIds = new Set();
+let loadedHistoryLabel = null;
+
+function enterSelectMode() {
+  if (proxyCaptures.length === 0) return;
+  proxySelectMode = true;
+  proxySelectedIds.clear();
+  document.getElementById('proxySelectBar').classList.add('visible');
+  updateSelCount();
+  renderProxyList();
+}
+
+function exitSelectMode() {
+  proxySelectMode = false;
+  proxySelectedIds.clear();
+  document.getElementById('proxySelectBar').classList.remove('visible');
+  renderProxyList();
+}
+
+function toggleProxySelect(id, ev) {
+  if (ev) ev.stopPropagation();
+  if (proxySelectedIds.has(id)) proxySelectedIds.delete(id);
+  else proxySelectedIds.add(id);
+  updateSelCount();
+  renderProxyList();
+}
+
+function toggleSelectAll() {
+  if (proxySelectedIds.size === proxyCaptures.length) {
+    proxySelectedIds.clear();
+  } else {
+    proxyCaptures.forEach(e => proxySelectedIds.add(e.id));
+  }
+  updateSelCount();
+  renderProxyList();
+}
+
+function updateSelCount() {
+  const el = document.getElementById('proxySelCount');
+  if (el) el.textContent = `${proxySelectedIds.size} / ${proxyCaptures.length}`;
+}
+
+function getSelectedCaptures() {
+  return proxyCaptures.filter(e => proxySelectedIds.has(e.id));
+}
+
+async function saveSelectedToApp() {
+  const caps = getSelectedCaptures();
+  if (caps.length === 0) return;
+  const label = prompt(i18n.t('history.enterLabel'), new Date().toLocaleString());
+  if (!label) return;
+  const result = await window.electronAPI.historySave({ label, captures: caps });
+  if (result?.ok) {
+    exitSelectMode();
+  }
+}
+
+async function exportSelectedAsJson() {
+  const caps = getSelectedCaptures();
+  if (caps.length === 0) return;
+  const label = prompt(i18n.t('history.enterLabel'), new Date().toLocaleString());
+  if (!label) return;
+  await window.electronAPI.historyExport({ label, captures: caps });
+  exitSelectMode();
+}
+
+async function openHistoryModal() {
+  const modal = document.getElementById('historyModal');
+  const listEl = document.getElementById('historyModalList');
+  modal.classList.add('visible');
+  listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--dim)">...</div>';
+  const list = await window.electronAPI.historyList();
+  if (!list || list.length === 0) {
+    listEl.innerHTML = `<div style="padding:20px;text-align:center;color:var(--dim)">${i18n.t('history.noSaved')}</div>`;
+    return;
+  }
+  listEl.innerHTML = list.map(item => {
+    const date = item.savedAt ? new Date(item.savedAt).toLocaleString() : '';
+    return `<div class="history-item">
+      <div class="history-item-info">
+        <div class="history-item-label">${esc(item.label)}</div>
+        <div class="history-item-meta">${date} · ${i18n.t('history.items', { count: item.count })}</div>
+      </div>
+      <button onclick="loadHistory('${escAttr(item.filename)}')">${i18n.t('history.load')}</button>
+      <button class="del" onclick="deleteHistory('${escAttr(item.filename)}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('visible');
+}
+
+async function loadHistory(filename) {
+  const data = await window.electronAPI.historyLoad(filename);
+  if (data?.error || !data?.captures) return;
+  proxyCaptures = data.captures;
+  selectedProxyId = null;
+  loadedHistoryLabel = data.label || filename;
+  showHistoryBadge();
+  closeHistoryModal();
+  renderProxyList();
+  renderProxyDetail();
+}
+
+async function deleteHistory(filename) {
+  if (!confirm(i18n.t('history.confirmDelete'))) return;
+  await window.electronAPI.historyDelete(filename);
+  openHistoryModal();
+}
+
+async function importHistory() {
+  const data = await window.electronAPI.historyImport();
+  if (!data || data.canceled || data.error || !data.captures) return;
+  proxyCaptures = data.captures;
+  selectedProxyId = null;
+  loadedHistoryLabel = data.label || 'Imported';
+  showHistoryBadge();
+  closeHistoryModal();
+  renderProxyList();
+  renderProxyDetail();
+}
+
+function showHistoryBadge() {
+  const badge = document.getElementById('historyBadge');
+  const label = document.getElementById('historyBadgeLabel');
+  if (badge && label) {
+    label.textContent = i18n.t('history.loadedFrom', { name: loadedHistoryLabel });
+    badge.classList.add('visible');
+  }
+}
+
+function backToLive() {
+  loadedHistoryLabel = null;
+  proxyCaptures = [];
+  selectedProxyId = null;
+  document.getElementById('historyBadge').classList.remove('visible');
+  renderProxyList();
+  renderProxyDetail();
+}
+
 function clearProxyCaptures() {
   proxyCaptures = [];
   selectedProxyId = null;
+  loadedHistoryLabel = null;
+  document.getElementById('historyBadge')?.classList.remove('visible');
   renderProxyList();
   renderProxyDetail();
 }
